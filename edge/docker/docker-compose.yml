@@ -1,0 +1,71 @@
+name: diegobot
+
+services:
+  diegobot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: diegobot:latest
+    container_name: diegobot_container
+    network_mode: host
+    ipc: host
+    pid: host
+    tty: true
+    stdin_open: true
+    # gdbによるプロセスへのattach(ROS2: Attach to Running Node)に必要。
+    # デフォルトのDockerケーパビリティではcap_sys_ptraceが外れておりptrace(2)が失敗するため。
+    cap_add:
+      - SYS_PTRACE
+    # GPUレンダリングパススルーの実体(nvidia-container-toolkit方式 or WSLg d3d12方式)は
+    # ネイティブ/WSL2で構成が異なるため、Makefileが環境判定して合成する
+    # docker-compose.gpu-native.yml / docker-compose.gpu-wsl.yml 側に分離してある。
+    environment:
+      - DISPLAY=${DISPLAY}
+      - WAYLAND_DISPLAY=${WAYLAND_DISPLAY}
+      - XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}
+      - PULSE_SERVER=${PULSE_SERVER}
+      # colcon buildを素で打ってもCMAKE_EXPORT_COMPILE_COMMANDS=ONが付くようにする(clangdがbuild/<pkg>/compile_commands.jsonを参照するため)。
+      - COLCON_DEFAULTS_FILE=/workspace/colcon_defaults.yaml
+      - ROS_DOMAIN_ID=0 # 必要に応じて
+
+    volumes:
+      - ../workspace:/workspace
+      # クラウド化後はSeaweedFS(S3互換)に置き換わる想定のデータ置き場(.claude/rules/default.md
+      # 参照)。build_map.launch.pyが保存する地図もここに置く(/data/maps)。
+      - ../../data:/data
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    working_dir: /workspace
+    env_file:
+      - ../../.env
+    restart: unless-stopped
+
+  micro-ros-agent:
+    image: diegobot:latest
+    container_name: diegobot_micro_ros_agent
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=0 # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
+      - TARGET_USB_PORT=/dev/ttyUSB0 # コンテナ内では常にこのパスで見える
+    devices:
+      - "${HOST_USB_PORT}:/dev/ttyUSB0"
+    restart: unless-stopped
+    # entrypoint(/ros_entrypoint.sh)がsourceするのは/opt/ros/${ROS_DISTRO}/setup.bashのみで、
+    # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
+    command: >
+      bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
+      ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200"
+
+  rosbridge:
+    image: diegobot:latest
+    container_name: diegobot_rosbridge
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=0 # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
+    restart: unless-stopped
+    command: ros2 launch rosbridge_server rosbridge_websocket_launch.xml

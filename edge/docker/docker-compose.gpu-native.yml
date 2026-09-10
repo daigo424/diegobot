@@ -1,0 +1,25 @@
+# ネイティブLinux + NVIDIA実GPU向けのGPUパススルー。nvidia-container-toolkit経由で
+# NVIDIAのネイティブOpenGL/GLXドライバをそのまま使う(WSL2のようなd3d12変換層は不要)。
+# ホスト側に `nvidia-ctk runtime configure --runtime=docker` 済みであることが前提。
+services:
+  diegobot:
+    build:
+      dockerfile: Dockerfile.local
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      # ネイティブLinuxのXorgはアクセス制御が有効で、xhost +local:rootだと
+      # X11再起動等で許可がリセットされ再発するため、ホストの実際のXauthorityファイルを
+      # そのまま渡す(WSLgは通常アクセス制御が緩く、この対応は不要)。
+      - XAUTHORITY=${XAUTHORITY}
+    volumes:
+      # ラズパイ等ヘッドレス環境ではXAUTHORITY未設定になり、素の${XAUTHORITY}展開だと
+      # 空文字列同士の"::ro"となりパースエラーになるため、無害な/dev/nullへフォールバックする。
+      - ${XAUTHORITY:-/dev/null}:${XAUTHORITY:-/dev/null}:ro

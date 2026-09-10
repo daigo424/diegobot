@@ -1,0 +1,14 @@
+{
+    "python.autoComplete.extraPaths": [
+        "/workspace/build/my_world",
+        "/workspace/install/my_world/lib/python3.12/site-packages",
+        "/opt/ros2_controllers_ws/install/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ],
+    "python.analysis.extraPaths": [
+        "/workspace/build/my_world",
+        "/workspace/install/my_world/lib/python3.12/site-packages",
+        "/opt/ros2_controllers_ws/install/lib/python3.12/site-packages",
+        "/opt/ros/jazzy/lib/python3.12/site-packages"
+    ]
+}

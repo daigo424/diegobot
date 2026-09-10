@@ -1,0 +1,15 @@
+[Unit]
+Description=AMR BLE Wi-Fi Provisioning Daemon
+After=bluetooth.target network.target
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+ExecStart=__EXEC_START__
+Restart=on-failure
+RestartSec=5
+User=__SERVICE_USER__
+WorkingDirectory=__WORKDIR__
+
+[Install]
+WantedBy=multi-user.target
