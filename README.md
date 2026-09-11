@@ -1,3 +1,4 @@
+
 # Diegobot
 
 [日本語表記はこちら](README.ja.md)
@@ -7,6 +8,13 @@ A self-built differential-drive AMR (autonomous mobile robot). ROS 2 Jazzy + mic
 The long-term goal is to build something like a TurtleBot3 Waffle.
 
 See [doc/wiring.md](doc/wiring.md) for hardware details.
+
+
+https://github.com/user-attachments/assets/dc853809-cab7-45fa-803e-697c4c420df1
+
+| Top side | Bottom side | Inside |
+|-|-|-|
+| <img width="4284" height="5712" alt="IMG_3719" src="https://github.com/user-attachments/assets/3d513cac-4771-48f2-9cec-5c678de6467a" /> | <img width="4284" height="5712" alt="IMG_3721" src="https://github.com/user-attachments/assets/99f35c13-2766-4b2a-8f3e-169f8383f291" /> | <img width="4284" height="5712" alt="IMG_3720" src="https://github.com/user-attachments/assets/ebad4de7-7a94-47d7-bd92-819fb143bd88" /> |
 
 ## Layout
 
