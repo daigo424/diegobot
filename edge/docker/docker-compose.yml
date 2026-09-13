@@ -48,15 +48,15 @@ services:
     tty: true
     environment:
       - ROS_DOMAIN_ID=0 # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
-      - TARGET_USB_PORT=/dev/ttyUSB0 # コンテナ内では常にこのパスで見える
+      - MICRO_ROS_PORT=/dev/ttyMicroROS # コンテナ内では常にこのパスで見える
     devices:
-      - "${HOST_USB_PORT}:/dev/ttyUSB0"
+      - "${HOST_USB_PORT}:/dev/ttyMicroROS"
     restart: unless-stopped
     # entrypoint(/ros_entrypoint.sh)がsourceするのは/opt/ros/${ROS_DISTRO}/setup.bashのみで、
     # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
     command: >
       bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
-      ros2 run micro_ros_agent micro_ros_agent serial --dev /dev/ttyUSB0 -b 115200"
+      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 115200"
 
   rosbridge:
     image: diegobot:latest
