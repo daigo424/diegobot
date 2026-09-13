@@ -1,0 +1,12 @@
+# サードパーティ製ROSパッケージ(rosdep/aptでバイナリが提供されておらず、ソースから
+# ビルドする必要があるもの)を、ソースそのものはコミットせず取得元・バージョンだけで
+# 管理するためのvcstoolマニフェスト。ROS 2公式が推奨する標準的な依存管理方式。
+# 取得コマンド: make vendor-import (= vcs import src < vendor.repos)
+# 参考: https://ros2-quality-assurance.readthedocs.io/en/released/tutorials/dependencies.html
+repositories:
+  vendor/Slamtec/sllidar_ros2:
+    type: git
+    url: https://github.com/Slamtec/sllidar_ros2.git
+    # upstreamにgit tagが無いため、versionはコミットIDで固定する
+    # (mainのままだと取得タイミングでコードが変わり再現性が無くなる)。
+    version: 34300099fadfc772965962dec837bf436706188f

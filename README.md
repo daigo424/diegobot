@@ -34,10 +34,11 @@ diegobot/
 ## Basic operations on the dev machine
 
 ```sh
-make build      # Build the ROS 2 image
-make up         # Start the containers (diegobot / rosbridge / micro-ros-agent)
-make down       # Stop them
-make login      # Enter the diegobot container
+make build          # Build the ROS 2 image
+make up             # Start the containers (diegobot / rosbridge / micro-ros-agent)
+make down           # Stop them
+make login          # Enter the diegobot container
+make vendor-import  # Fetch third-party packages listed in edge/workspace/vendor.repos (run after a fresh clone or when vendor.repos changes)
 ```
 
 Motor check:

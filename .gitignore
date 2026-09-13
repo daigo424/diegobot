@@ -48,6 +48,10 @@ doc/**/*.bkp
 edge/workspace/**/*.pdf
 edge/workspace/**/*.gv
 
+# vcstool(edge/workspace/vendor.repos)で取得するサードパーティソース。取得元・バージョンは
+# vendor.repos側で管理し、実体はコミットしない。
+edge/workspace/src/vendor/
+
 # 耐久試験・カオス実験の実行結果(生成物。実行の都度ローカルで生成される)
 testing/soak_test/reports/*
 !testing/soak_test/reports/.gitkeep

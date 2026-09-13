@@ -86,6 +86,10 @@ colcon-build-clean-warn:
 install-packages:
 	$(MAKE) colcon CMD_RUN="apt-get update && rosdep install --from-paths src --ignore-src -r -y"
 
+# 詳細はedge/workspace/vendor.repos参照。
+vendor-import:
+	$(EXEC) $(ROS2_SERVICE) bash -c "cd $(ROS2_WS) && vcs import src < vendor.repos"
+
 launch-urdf-display:
 	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/my_robot_description/urdf/$(FILENAME)"
 

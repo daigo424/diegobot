@@ -26,10 +26,11 @@ diegobot/
 ## 開発機での基本操作
 
 ```sh
-make build      # ROS 2イメージをビルド
-make up         # コンテナ群を起動 (diegobot / rosbridge / micro-ros-agent)
-make down       # 停止
-make login      # diegobotコンテナへ入る
+make build          # ROS 2イメージをビルド
+make up             # コンテナ群を起動 (diegobot / rosbridge / micro-ros-agent)
+make down           # 停止
+make login          # diegobotコンテナへ入る
+make vendor-import  # edge/workspace/vendor.reposに書かれたサードパーティパッケージを取得(新規clone直後やvendor.repos更新時に実行)
 ```
 
 モーター動作確認:
