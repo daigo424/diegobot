@@ -46,7 +46,7 @@ graph LR
 
 - 接続: USBケーブル1本（Picoのmicro-USBポート ⟷ ラズパイのUSB-Aポート）
 - 通信: micro-ROS（USBネイティブCDCシリアル、`Serial.begin(115200)`）
-- Linux側デバイスパス: `/dev/ttyACM*`（reflash・抜き差しのたびに番号がずれることがあるため、`.env` の `HOST_USB_PORT` を都度確認）
+- Linux側デバイスパス: `/dev/ttyACM*`（reflash・抜き差しのたびに番号がずれることがあるため、`.env` の `HOST_MICRO_ROS_PORT` を都度確認）
 - Picoへの給電: このUSBケーブル経由のバスパワー（別電源不要）
 
 ## 4. Pico ⟷ TB6612FNG ピン割当

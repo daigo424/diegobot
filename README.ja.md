@@ -38,7 +38,7 @@ make login      # diegobotコンテナへ入る
 make teleop-twist-keyboard   # キーボードで/cmd_velを送って走行確認
 ```
 
-`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(Pico)を`.env`の`HOST_USB_PORT`で指定する。`/dev/ttyACM*`の番号は抜き差しやreflashのたびにずれることがあるため、都度確認すること。
+`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(Pico)を`.env`の`HOST_MICRO_ROS_PORT`で指定する。`/dev/ttyACM*`の番号は抜き差しやreflashのたびにずれることがあるため、都度確認すること。
 
 ## Picoファームウェア
 

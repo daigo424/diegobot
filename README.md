@@ -46,7 +46,7 @@ Motor check:
 make teleop-twist-keyboard   # Drive by sending /cmd_vel from the keyboard
 ```
 
-The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (Pico) from `HOST_USB_PORT` in `.env`. The `/dev/ttyACM*` number can shift on replug/reflash, so check it each time.
+The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (Pico) from `HOST_MICRO_ROS_PORT` in `.env`. The `/dev/ttyACM*` number can shift on replug/reflash, so check it each time.
 
 ## Pico firmware
 

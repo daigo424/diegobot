@@ -1,0 +1,25 @@
+services:
+  diegobot:
+    devices:
+      # RPLIDAR C1 (sllidar_ros2)。micro-ros-agentサービスとは別コンテナなので
+      # デバイス名が競合することはないが、紛らわしさを避けるため区別できる名前にする。
+      - "${HOST_LIDAR_PORT}:/dev/ttyLidar"
+
+  micro-ros-agent:
+    image: diegobot:latest
+    container_name: diegobot_micro_ros_agent
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID} # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
+      - MICRO_ROS_PORT=/dev/ttyMicroROS # コンテナ内では常にこのパスで見える
+    devices:
+      - "${HOST_MICRO_ROS_PORT}:/dev/ttyMicroROS"
+    restart: unless-stopped
+    # entrypoint(/ros_entrypoint.sh)がsourceするのは/opt/ros/${ROS_DISTRO}/setup.bashのみで、
+    # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
+    command: >
+      bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
+      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 115200"

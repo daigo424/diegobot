@@ -26,7 +26,7 @@ services:
       - PULSE_SERVER=${PULSE_SERVER}
       # colcon buildを素で打ってもCMAKE_EXPORT_COMPILE_COMMANDS=ONが付くようにする(clangdがbuild/<pkg>/compile_commands.jsonを参照するため)。
       - COLCON_DEFAULTS_FILE=/workspace/colcon_defaults.yaml
-      - ROS_DOMAIN_ID=0 # 必要に応じて
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
 
     volumes:
       - ../workspace:/workspace
@@ -39,25 +39,6 @@ services:
       - ../../.env
     restart: unless-stopped
 
-  micro-ros-agent:
-    image: diegobot:latest
-    container_name: diegobot_micro_ros_agent
-    depends_on:
-      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
-    network_mode: host
-    tty: true
-    environment:
-      - ROS_DOMAIN_ID=0 # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
-      - MICRO_ROS_PORT=/dev/ttyMicroROS # コンテナ内では常にこのパスで見える
-    devices:
-      - "${HOST_USB_PORT}:/dev/ttyMicroROS"
-    restart: unless-stopped
-    # entrypoint(/ros_entrypoint.sh)がsourceするのは/opt/ros/${ROS_DISTRO}/setup.bashのみで、
-    # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
-    command: >
-      bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
-      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 115200"
-
   rosbridge:
     image: diegobot:latest
     container_name: diegobot_rosbridge
@@ -66,6 +47,6 @@ services:
     network_mode: host
     tty: true
     environment:
-      - ROS_DOMAIN_ID=0 # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID} # diegobotサービス側と同じ値でないとDDS越しに/cmd_velが見えない
     restart: unless-stopped
     command: ros2 launch rosbridge_server rosbridge_websocket_launch.xml
