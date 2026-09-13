@@ -1,10 +1,14 @@
 #include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_MPU6050.h>
+#include <Adafruit_Sensor.h>
 #include <micro_ros_platformio.h>
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
 #include <rmw_microros/rmw_microros.h>
 #include <geometry_msgs/msg/twist.h>
+#include <sensor_msgs/msg/imu.h>
 
 // --- ピン定義 (TB6612FNG) ---
 // GP23/24/25/29はPicoボード上でSMPSモード制御・VBUS検知・LED・VSYS電圧センスに
@@ -27,9 +31,17 @@ const int PWM_RANGE = 255;   // 8bit相当 (0〜255)
 const float WHEEL_BASE = 0.17;  // トレッド幅（左右輪の間隔: 約18cm）
 const float MAX_SPEED  = 0.5;   // 最大想定速度 (m/s)
 
+// --- ピン定義 (GY-521 / MPU6050) ---
+const int PIN_SDA = 20;
+const int PIN_SCL = 21;
+Adafruit_MPU6050 mpu;
+bool imu_available = false;
+
 // micro-ROS 関連オブジェクト
 rcl_subscription_t subscriber;
 geometry_msgs__msg__Twist msg;
+rcl_publisher_t imu_publisher;
+sensor_msgs__msg__Imu imu_msg;
 rclc_executor_t executor;
 rclc_support_t support;
 rcl_allocator_t allocator;
@@ -116,6 +128,12 @@ bool create_entities() {
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
         "/cmd_vel") != RCL_RET_OK) return false;
 
+  if (rclc_publisher_init_default(
+        &imu_publisher,
+        &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
+        "/imu") != RCL_RET_OK) return false;
+
   executor = rclc_executor_get_zero_initialized_executor();
   if (rclc_executor_init(&executor, &support.context, 1, &allocator) != RCL_RET_OK) return false;
   if (rclc_executor_add_subscription(&executor, &subscriber, &msg, &subscription_callback, ON_NEW_DATA) != RCL_RET_OK) return false;
@@ -127,10 +145,40 @@ void destroy_entities() {
   rmw_context_t * rmw_context = rcl_context_get_rmw_context(&support.context);
   (void) rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
+  rcl_publisher_fini(&imu_publisher, &node);
   rcl_subscription_fini(&subscriber, &node);
   rclc_executor_fini(&executor);
   rcl_node_fini(&node);
   rclc_support_fini(&support);
+}
+
+// IMUを読んで/imuへpublishする。orientationは未推定(センサーフュージョン無し)のため
+// REP-145の規約通りorientation_covariance[0]=-1で「値なし」を明示する。
+void publish_imu() {
+  if (!imu_available) return;
+
+  sensors_event_t a, g, temp;
+  mpu.getEvent(&a, &g, &temp);
+
+  imu_msg.header.frame_id.data = (char *)"imu_link";
+  imu_msg.header.frame_id.size = 8;
+  imu_msg.header.frame_id.capacity = 9;
+
+  imu_msg.orientation.w = 1.0;
+  imu_msg.orientation.x = 0.0;
+  imu_msg.orientation.y = 0.0;
+  imu_msg.orientation.z = 0.0;
+  imu_msg.orientation_covariance[0] = -1;
+
+  imu_msg.angular_velocity.x = g.gyro.x;
+  imu_msg.angular_velocity.y = g.gyro.y;
+  imu_msg.angular_velocity.z = g.gyro.z;
+
+  imu_msg.linear_acceleration.x = a.acceleration.x;
+  imu_msg.linear_acceleration.y = a.acceleration.y;
+  imu_msg.linear_acceleration.z = a.acceleration.z;
+
+  rcl_publish(&imu_publisher, &imu_msg, NULL);
 }
 
 void _setup() {
@@ -144,6 +192,12 @@ void _setup() {
   analogWriteFreq(PWM_FREQ);
   analogWriteRange(PWM_RANGE);
   stop_motors();
+
+  // IMU初期化。見つからなくてもモーター制御自体は継続する。
+  Wire.setSDA(PIN_SDA);
+  Wire.setSCL(PIN_SCL);
+  Wire.begin();
+  imu_available = mpu.begin();
 
   // micro-ROS トランスポート初期化
   Serial.begin(115200);
@@ -169,6 +223,7 @@ void _loop() {
       EXECUTE_EVERY_N_MS(200, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
       if (state == AGENT_CONNECTED) {
         rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
+        EXECUTE_EVERY_N_MS(50, publish_imu();); // 20Hz
       }
       break;
 
