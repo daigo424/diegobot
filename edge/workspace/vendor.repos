@@ -10,3 +10,9 @@ repositories:
     # upstreamにgit tagが無いため、versionはコミットIDで固定する
     # (mainのままだと取得タイミングでコードが変わり再現性が無くなる)。
     version: 34300099fadfc772965962dec837bf436706188f
+  vendor/christianrauch/camera_ros:
+    type: git
+    url: https://github.com/christianrauch/camera_ros.git
+    # edge/docker/DockerfileでビルドするRaspberry Pi財団版libcamera(v0.7.2+rpt20260817)に
+    # 対応するバージョンとして0.7.0を使用。
+    version: 0.7.0

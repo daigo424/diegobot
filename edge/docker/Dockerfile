@@ -24,6 +24,14 @@ RUN apt-get update && apt-get install -y \
       git \
       bear \
       vim \
+      meson \
+      ninja-build \
+      libyaml-dev \
+      python3-yaml \
+      python3-ply \
+      python3-jinja2 \
+      libudev-dev \
+      openssl \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -60,6 +68,22 @@ RUN apt-get update && \
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     cd /opt/micro_ros_agent_ws && \
     colcon build --merge-install
+
+# apt版libcamera(ros-${ROS_DISTRO}-libcamera、camera_rosが依存)は、imx708のAfWindows制御を
+# IPAプロキシへシリアライズする際にクラッシュする(FATAL: A list of V4L2 controls requires
+# a ControlInfoMap)。ホストのrpicam-appsで動いているRaspberry Pi財団パッチ版libcameraを
+# ソースビルドし、/usr/localにインストールする(apt版と共存させると意図せずapt版がリンク
+# されるため、camera_rosをビルドするedge/workspace/vendor.repos側ではlibcamera/camera-ros
+# のapt版を一切インストールしないこと)。
+RUN git clone --branch v0.7.2+rpt20260817 --depth 1 \
+      https://github.com/raspberrypi/libcamera.git \
+      /opt/libcamera
+
+RUN cd /opt/libcamera && \
+    meson setup build --prefix=/usr/local --buildtype=release \
+      -Dgstreamer=disabled -Dpycamera=disabled -Dqcam=disabled -Dcam=disabled -Ddocumentation=disabled && \
+    ninja -C build install && \
+    ldconfig
 
 # bash -c "... && bash"のような入れ子bash越しだとcomplete登録(colcon-argcomplete)が
 # 子プロセスに引き継がれない(exportされる環境変数と違い、complete -Fはシェルのメモリ内状態のため)。

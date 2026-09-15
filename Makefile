@@ -83,8 +83,10 @@ colcon-build-clean:
 colcon-build-clean-warn:
 	$(MAKE) colcon-build CLEAN=1 WARN=1
 
+# libcameraはedge/docker/Dockerfileでソースビルド済み(apt版と共存不可)のため、
+# rosdepがapt版を入れないよう--skip-keysで除外する。
 install-packages:
-	$(MAKE) colcon CMD_RUN="apt-get update && rosdep install --from-paths src --ignore-src -r -y"
+	$(MAKE) colcon CMD_RUN="apt-get update && rosdep install --from-paths src --ignore-src -r -y --skip-keys=libcamera"
 
 # 詳細はedge/workspace/vendor.repos参照。
 vendor-import:
@@ -125,6 +127,9 @@ pi-ssh:
 	ssh $(PI_USER)@$(PI_HOST)
 pi-diagnose:
 	ssh $(PI_USER)@$(PI_HOST) bash -s < edge/provisioning/scripts/pi-diagnose.sh
+FILE ?=
+pi-fetch:
+	scp $(PI_SSH_OPTS) $(PI_USER)@$(PI_HOST):$(FILE) .
 
 # ラズパイ上でのイメージビルドが遅い/メモリ不足になりがちな場合に、開発機側でarm64向けに
 # クロスビルドしてイメージそのものを転送する。QEMUエミュレーション経由のためネイティブ

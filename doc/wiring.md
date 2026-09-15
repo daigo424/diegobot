@@ -49,7 +49,12 @@ graph LR
 - Linux側デバイスパス: `/dev/ttyACM*`（reflash・抜き差しのたびに番号がずれることがあるため、`.env` の `HOST_MICRO_ROS_PORT` を都度確認）
 - Picoへの給電: このUSBケーブル経由のバスパワー（別電源不要）
 
-## 4. Pico ⟷ TB6612FNG ピン割当
+## 4. Raspberry Pi 4B ⟷ カメラ
+
+- カメラモジュール: innomaker CAM-IMX708AF（センサー: IMX708）
+- 接続: CSIリボンケーブル(15pin-15pin、モジュール同梱品)でラズパイのCAM0ポートへ接続
+
+## 5. Pico ⟷ TB6612FNG ピン割当
 
 `edge/pico/src/production/main.hpp` のピン定義準拠。
 
@@ -81,11 +86,11 @@ PWM設定は20kHz・8bit(0-255)。RP2040は `analogWriteFreq`/`analogWriteRange`
 | 右エンコーダ A相 | GP16 |
 | 右エンコーダ B相 | GP17 |
 
-## 5. モーター仕様
+## 6. モーター仕様
 
 左右輪とも **JGB37-520 DC12V** ギアードモーター。TB6612FNGのVMは18650×3(3S)由来の公称11.1V/満充電12.6Vのため、モーター定格12Vに対しほぼ整合（フル充電直後は定格をわずかに超えるが実用上問題になりにくい範囲）。
 
-## 6. TB6612FNG ピン配線まとめ
+## 7. TB6612FNG ピン配線まとめ
 
 | ピン | 接続先 |
 |---|---|
@@ -98,7 +103,7 @@ PWM設定は20kHz・8bit(0-255)。RP2040は `analogWriteFreq`/`analogWriteRange`
 | AO1 / AO2 | 左モーター |
 | BO1 / BO2 | 右モーター |
 
-## 7. 既知の制約・注意点
+## 8. 既知の制約・注意点
 
 - STBYをVCCへ直結しているため、Pico側からドライバを無効化する手段が無い。`production/main.hpp` の `AGENT_DISCONNECTED` 時のモーター停止は、STBY遮断ではなくAIN/BIN/PWMを全てLOWにする（ショートブレーキ）方式で実現している。
 - モーター用電池パックとラズパイ用USB電源は完全に別系統。GNDはPico経由でのみ共通化されるため、Pico未接続の状態でTB6612だけに通電するとロジック側が不定電位になる点に注意。

@@ -1,9 +1,46 @@
 services:
   diegobot:
+    volumes:
+      # libcameraはudev経由でカメラのメディアデバイスを列挙するため、コンテナにも
+      # ホストのudevデータベースが見える必要がある(無いと/dev/media*があってもカメラを発見できない)。
+      - /run/udev:/run/udev:ro
+    # libcameraはIPA(画像処理アルゴリズム)を別プロセスにfork/execして分離する設計で、
+    # DockerのデフォルトseccompプロファイルだとこのforkがENOSYS("Function not implemented")
+    # で失敗する。seccompを外して許可する。
+    security_opt:
+      - seccomp:unconfined
     devices:
       # RPLIDAR C1 (sllidar_ros2)。micro-ros-agentサービスとは別コンテナなので
       # デバイス名が競合することはないが、紛らわしさを避けるため区別できる名前にする。
       - "${HOST_LIDAR_PORT}:/dev/ttyLidar"
+      # imx708カメラ(camera_ros/libcamera)用。/dev/video*・/dev/media*に加え、
+      # libcameraのDmaBufAllocatorが使うdma-bufヒープ(/dev/dma_heap/*)も無いと
+      # "no cameras available"で起動できない。
+      - "/dev/video0:/dev/video0"
+      - "/dev/video1:/dev/video1"
+      - "/dev/video10:/dev/video10"
+      - "/dev/video11:/dev/video11"
+      - "/dev/video12:/dev/video12"
+      - "/dev/video13:/dev/video13"
+      - "/dev/video14:/dev/video14"
+      - "/dev/video15:/dev/video15"
+      - "/dev/video16:/dev/video16"
+      - "/dev/video18:/dev/video18"
+      - "/dev/video19:/dev/video19"
+      - "/dev/video20:/dev/video20"
+      - "/dev/video21:/dev/video21"
+      - "/dev/video22:/dev/video22"
+      - "/dev/video23:/dev/video23"
+      - "/dev/video31:/dev/video31"
+      - "/dev/media0:/dev/media0"
+      - "/dev/media1:/dev/media1"
+      - "/dev/media2:/dev/media2"
+      - "/dev/media3:/dev/media3"
+      - "/dev/media4:/dev/media4"
+      - "/dev/dma_heap/system:/dev/dma_heap/system"
+      - "/dev/dma_heap/linux,cma:/dev/dma_heap/linux,cma"
+      - "/dev/v4l-subdev0:/dev/v4l-subdev0"
+      - "/dev/v4l-subdev1:/dev/v4l-subdev1"
 
   micro-ros-agent:
     image: diegobot:latest
