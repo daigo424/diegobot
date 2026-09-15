@@ -51,7 +51,7 @@ graph LR
 
 ## 4. Raspberry Pi 4B ⟷ カメラ
 
-- カメラモジュール: innomaker CAM-IMX708AF（センサー: IMX708）
+- カメラモジュール: innomaker CAM-IMX708AF（センサー: IMX708、RGBのみ・深度センサー非搭載）
 - 接続: CSIリボンケーブル(15pin-15pin、モジュール同梱品)でラズパイのCAM0ポートへ接続
 
 ## 5. Pico ⟷ TB6612FNG ピン割当

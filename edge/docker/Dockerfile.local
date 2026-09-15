@@ -13,6 +13,8 @@ RUN apt-get install -y x11-apps
 # moveit/moveit-py/controller-manager/ros2-controlはここでは入れない。src/以下の各package.xmlに
 # exec_depend/dependとして宣言済みで、コンテナ起動後のmake install-packages(rosdep)が拾う。
 # ここに残すのはpackage.xmlで宣言しようがないもの(単体で叩くチュートリアル、ミドルウェア選択、開発ツール)だけ。
+# libcameraはsrc/vendor/camera_rosのビルド依存だが、実機用Dockerfileと違いこちらはソースビルド版を
+# 使わない(開発機にカメラは無くビルドが通ればよいため)ので、素直にapt版を入れる。
 RUN apt-get update && apt-get install -y \
       ros-${ROS_DISTRO}-teleop-twist-keyboard \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
@@ -23,6 +25,8 @@ RUN apt-get update && apt-get install -y \
       ros-${ROS_DISTRO}-rqt-tf-tree \
       ros-${ROS_DISTRO}-ros-gz \
       ros-${ROS_DISTRO}-gz-ros2-control* \
+      ros-${ROS_DISTRO}-turtlebot3-description \
+      ros-${ROS_DISTRO}-libcamera \
       python3-colcon-common-extensions \
       python3-colcon-argcomplete \
       python3-rosdep \
@@ -81,6 +85,14 @@ source /opt/ros2_controllers_ws/install/setup.bash
 source /opt/micro_ros_agent_ws/install/setup.bash
 source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 test -f /workspace/install/setup.bash && source /workspace/install/setup.bash
+EOF
+
+# vimはデフォルトだと.world/.urdf/.xacroをファイルタイプ判定できずシンタックスハイライトが効かない
+# (拡張子が非標準のため)。XMLファイルとして扱うよう明示する。
+RUN cat > /root/.vimrc <<'EOF'
+syntax on
+filetype plugin indent on
+au BufRead,BufNewFile *.xacro,*.urdf,*.world,*.sdf set filetype=xml
 EOF
 
 ENV TURTLEBOT3_MODEL=waffle

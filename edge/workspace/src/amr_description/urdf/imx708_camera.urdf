@@ -1,0 +1,65 @@
+<?xml version="1.0" ?>
+<robot name="turtlebot3_waffle" xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="namespace" default=""/>
+  <xacro:property name="namespace" value="$(arg namespace)"/>
+
+  <!-- IMX708本体の仕様(Raspberry Pi Camera Module 3 Standard公式データシート由来)。
+       カメラ機種が変わらない限り変更不要。
+       出典: https://datasheets.raspberrypi.com/camera/camera-module-3-product-brief.pdf -->
+  <xacro:property name="camera_pcb_width" value="0.025"/>
+  <xacro:property name="camera_pcb_depth" value="0.024"/>
+  <xacro:property name="camera_pcb_height" value="0.0115"/>
+
+  <!-- このロボット(diegobot/暫定Burger)固有の取り付け位置。IMX708とは無関係で、
+       車体設計によって調整するもの。位置は仮置き(正面・チルト無し)。
+       RVizでcamera_linkのTF軸を見ながらxyz/rpyを調整すること。 -->
+  <xacro:property name="camera_mount_xyz" value="0.03 0 0.14"/>
+  <xacro:property name="camera_mount_rpy" value="0 0 0"/>
+
+  <joint name="${namespace}camera_joint" type="fixed">
+    <origin xyz="${camera_mount_xyz}" rpy="${camera_mount_rpy}"/>
+    <parent link="${namespace}base_link"/>
+    <child link="${namespace}camera_link"/>
+  </joint>
+
+  <link name="${namespace}camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_pcb_width} ${camera_pcb_depth} ${camera_pcb_height}"/>
+      </geometry>
+      <material name="camera_color">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${camera_pcb_width} ${camera_pcb_depth} ${camera_pcb_height}"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <!-- 公式データシートに質量の記載が無いため、小型カメラモジュールとしての概算値。 -->
+      <mass value="0.01" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="0.0001" ixy="0.0" ixz="0.0" iyy="0.0001" iyz="0.0" izz="0.0001" />
+    </inertial>
+  </link>
+
+  <joint name="${namespace}camera_rgb_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="${namespace}camera_link"/>
+    <child link="${namespace}camera_rgb_frame"/>
+  </joint>
+  <link name="${namespace}camera_rgb_frame"/>
+
+  <!-- ロボット座標系(X=前,Y=左,Z=上)から光学座標系(Z=奥行き,X=右,Y=下)への固定変換。
+       ROS標準の慣例(REP 103)で、カメラ機種やこのロボットの設計に関係なく常に同じ値。 -->
+  <joint name="${namespace}camera_rgb_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="-1.57 0 -1.57"/>
+    <parent link="${namespace}camera_rgb_frame"/>
+    <child link="${namespace}camera_rgb_optical_frame"/>
+  </joint>
+  <link name="${namespace}camera_rgb_optical_frame"/>
+
+</robot>
