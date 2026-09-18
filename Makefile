@@ -13,11 +13,18 @@ GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-wsl.yml
 else
 GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-native.yml
 endif
-# ROBOT_ATTACHED=0でPico/LiDARのUSBデバイス無しでも起動できる(開発機からラズパイのtopicを
-# rviz2等で見るだけの用途向け)。デフォルトは実機接続前提の1。
+# CAMERA/LIDAR/MICRO_ROS_ATTACHED=0でそれぞれのUSB/デバイスファイル無しでも起動できる
+# (無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
+# 実際に接続されているハードウェアだけをoverrideで足す)。個別指定が無ければROBOT_ATTACHED
+# (デフォルト1=実機フル接続前提)の値を引き継ぐ。
 ROBOT_ATTACHED     ?= 1
-ROBOT_ATTACHED_COMPOSE_FILE := $(if $(filter 1,$(ROBOT_ATTACHED)),edge/docker/docker-compose.robot-attached.yml,)
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(ROBOT_ATTACHED_COMPOSE_FILE),-f $(ROBOT_ATTACHED_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+CAMERA_ATTACHED    ?= $(ROBOT_ATTACHED)
+LIDAR_ATTACHED     ?= $(ROBOT_ATTACHED)
+MICRO_ROS_ATTACHED ?= $(ROBOT_ATTACHED)
+CAMERA_COMPOSE_FILE    := $(if $(filter 1,$(CAMERA_ATTACHED)),edge/docker/docker-compose.camera-attached.yml,)
+LIDAR_COMPOSE_FILE     := $(if $(filter 1,$(LIDAR_ATTACHED)),edge/docker/docker-compose.lidar-attached.yml,)
+MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
@@ -38,8 +45,15 @@ up:
 	@. ./.env 2>/dev/null;
 	$(MAKE) install-packages
 
+# カメラ・LiDAR・Picoのいずれも未接続な開発機から、ラズパイ実機のtopicをrviz2等で
+# 見るだけの用途向け。
 up-remote:
 	$(MAKE) up ROBOT_ATTACHED=0
+
+# 開発機にPicoだけをUSB接続してmicro-ROSファームウェアを検証する用途向け
+# (カメラ・LiDARは実機側のものなので開発機には無い)。
+up-pico-remote:
+	$(MAKE) up ROBOT_ATTACHED=0 MICRO_ROS_ATTACHED=1
 
 down:
 	$(COMPOSE) --env-file .env down
@@ -90,7 +104,7 @@ install-packages:
 
 # 詳細はedge/workspace/vendor.repos参照。
 vendor-import:
-	$(EXEC) $(ROS2_SERVICE) bash -c "cd $(ROS2_WS) && vcs import src < vendor.repos"
+	$(EXEC) $(ROS2_SERVICE) bash -c "git config --global --add safe.directory '*' && cd $(ROS2_WS) && vcs import src < vendor.repos"
 
 launch-urdf-display:
 	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/my_robot_description/urdf/$(FILENAME)"
@@ -122,7 +136,9 @@ pi-rsync:
 	  --exclude=edge/workspace/log/ \
 	  --exclude=edge/workspace/core \
 	  --exclude=edge/workspace/core.* \
+	  --exclude=edge/workspace/src/vendor/ \
 	  ./ $(PI_USER)@$(PI_HOST):~/diegobot
+	@echo "vendor/(vcstool管理の外部パッケージ)は転送していません。ラズパイ側で 'make vendor-import' を実行してください"
 pi-ssh:
 	ssh $(PI_USER)@$(PI_HOST)
 pi-diagnose:

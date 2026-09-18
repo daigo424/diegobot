@@ -5,7 +5,7 @@
 
   <!-- IMX708本体の仕様(Raspberry Pi Camera Module 3 Standard公式データシート由来)。
        カメラ機種が変わらない限り変更不要。
-       出典: https://datasheets.raspberrypi.com/camera/camera-module-3-product-brief.pdf -->
+       出典 https://datasheets.raspberrypi.com/camera/camera-module-3-product-brief.pdf -->
   <xacro:property name="camera_pcb_width" value="0.025"/>
   <xacro:property name="camera_pcb_depth" value="0.024"/>
   <xacro:property name="camera_pcb_height" value="0.0115"/>

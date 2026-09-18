@@ -1,9 +1,9 @@
 <?xml version="1.0" ?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <!-- imx708(Raspberry Pi Camera Module 3 Standard相当)の公式データシート値:
-       水平画角66°・垂直画角41°(焦点距離4.74mm、センサー4608x2592=16:9)。
-       image解像度は実機の16:9比を保ったまま、シミュレーション負荷軽減のため縮小している。 -->
+  <!-- imx708(Raspberry Pi Camera Module 3 Standard相当)の公式データシート値。
+       水平画角66°・垂直画角41°(焦点距離4.74mm、センサー4608x2592、16対9)。
+       image解像度は実機の16対9比を保ったまま、シミュレーション負荷軽減のため縮小している。 -->
   <gazebo reference="camera_link">
     <sensor name="camera" type="camera">
       <camera>

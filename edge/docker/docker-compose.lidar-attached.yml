@@ -1,0 +1,6 @@
+services:
+  diegobot:
+    devices:
+      # RPLIDAR C1 (sllidar_ros2)。micro-ros-agentサービスとは別コンテナなので
+      # デバイス名が競合することはないが、紛らわしさを避けるため区別できる名前にする。
+      - "${HOST_LIDAR_PORT}:/dev/ttyLidar"

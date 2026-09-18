@@ -61,9 +61,11 @@ pio run -t upload
 ## Deploying to the Raspberry Pi
 
 ```sh
-make pi-rsync   # Copy the code over
+make pi-rsync   # Copy the code over (vendor/ is excluded; it's third-party code managed by vcstool)
 make pi-ssh     # SSH into the Pi
 ```
+
+`vendor/` isn't copied by `pi-rsync`, so run `make vendor-import` on the Pi too (first time, or whenever `vendor.repos` changes).
 
 See [edge/provisioning/README.md](edge/provisioning/README.md) for first-time setup on the Pi (installing Docker, making the BLE provisioning daemon persistent, etc.).
 

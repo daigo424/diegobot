@@ -53,9 +53,11 @@ pio run -t upload
 ## ラズパイへのデプロイ
 
 ```sh
-make pi-rsync   # コード転送
+make pi-rsync   # コード転送(vendor/はvcstool管理の外部パッケージのため転送対象外)
 make pi-ssh     # ラズパイへSSH
 ```
+
+`vendor/`は`pi-rsync`で転送されないため、ラズパイ上でも初回・`vendor.repos`更新時に`make vendor-import`を実行すること。
 
 ラズパイ上での初回セットアップ(Docker導入・BLEプロビジョニングデーモン常駐化など)は [edge/provisioning/README.md](edge/provisioning/README.md) を参照。
 

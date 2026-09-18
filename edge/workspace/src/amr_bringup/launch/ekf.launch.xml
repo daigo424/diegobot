@@ -1,0 +1,8 @@
+<launch>
+    <let name="ekf_config_path"
+         value="$(find-pkg-share amr_bringup)/config/ekf.yaml" />
+
+    <node pkg="robot_localization" exec="ekf_node" name="ekf_filter_node" output="screen">
+        <param from="$(var ekf_config_path)" />
+    </node>
+</launch>
