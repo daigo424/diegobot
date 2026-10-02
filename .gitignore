@@ -52,6 +52,9 @@ edge/workspace/**/*.gv
 # vendor.repos側で管理し、実体はコミットしない。
 edge/workspace/src/vendor/
 
+# Makefile読み込み時に実際に存在するvideoデバイスから動的生成されるcompose override。
+edge/docker/docker-compose.camera-devices.generated.yml
+
 # 耐久試験・カオス実験の実行結果(生成物。実行の都度ローカルで生成される)
 testing/soak_test/reports/*
 !testing/soak_test/reports/.gitkeep

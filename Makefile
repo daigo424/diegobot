@@ -24,7 +24,29 @@ MICRO_ROS_ATTACHED ?= $(ROBOT_ATTACHED)
 CAMERA_COMPOSE_FILE    := $(if $(filter 1,$(CAMERA_ATTACHED)),edge/docker/docker-compose.camera-attached.yml,)
 LIDAR_COMPOSE_FILE     := $(if $(filter 1,$(LIDAR_ATTACHED)),edge/docker/docker-compose.lidar-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+
+# カメラのvideoデバイス番号は検出状況によって起動毎に変わりうる(未検出時は/dev/video0/1が
+# 無いこともある)。固定リストで指定するとdocker compose自体が存在しないデバイスで失敗する
+# ため、Makefile読み込み時に実際に存在するものだけを動的に書き出す。
+CAMERA_DEVICES_GENERATED := edge/docker/docker-compose.camera-devices.generated.yml
+ifeq ($(CAMERA_ATTACHED),1)
+_MK_GEN_CAMERA_DEVICES := $(shell { \
+	echo "services:"; \
+	echo "  diegobot:"; \
+	echo "    devices:"; \
+	for n in 0 1 10 11 12 13 14 15 16 18 19 20 21 22 23 31; do \
+	  [ -e "/dev/video$$n" ] && echo "      - \"/dev/video$$n:/dev/video$$n\""; \
+	done; \
+	for f in /dev/media0 /dev/media1 /dev/media2 /dev/media3 /dev/media4 /dev/dma_heap/system /dev/dma_heap/linux,cma /dev/v4l-subdev0 /dev/v4l-subdev1; do \
+	  [ -e "$$f" ] && echo "      - \"$$f:$$f\""; \
+	done; \
+} > $(CAMERA_DEVICES_GENERATED))
+CAMERA_DEVICES_COMPOSE_FILE := $(CAMERA_DEVICES_GENERATED)
+else
+CAMERA_DEVICES_COMPOSE_FILE :=
+endif
+
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
