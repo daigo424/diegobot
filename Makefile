@@ -89,15 +89,15 @@ login:
 # ros2 launchで起動したプロセスをCtrl+Cせず再起動すると、gz sim(rubyラッパー)や
 # ros_gz_bridge系ノードが孤児化して残り続けることがある(SIGINTがlaunchの子孫全員に
 # 伝播しないケース)。それらをまとめてSIGKILLで掃除する。
-# docker-compose.ymlのpid: hostによりホストとPID空間を共有しているため、
-# 1) -u rootでコンテナ内(root実行)由来のものだけに絞り、ホスト側の一般ユーザープロセス
-#    (make/docker compose exec自体など)を誤って巻き込まない
-# 2) パターン中の各キーワードを[x]で1文字だけ字句分割し、pkill自身のコマンドライン
-#    (-fの引数にこのパターン文字列がそのまま載る)に自己マッチしてpkillが自爆するのを防ぐ
-KILL_ROS_PATTERN := ([r]os2|g[z] sim|gzs[e]rver|gzcl[i]ent|ros[_]gz|rvi[z]2|robot_state_publ[i]sher|[n]av2|component_conta[i]ner|teleop_twist_key[b]oard|rub[y].*gz_tools)
+# docker-compose.ymlのpid: hostによりホストとPID空間を共有しているため、コンテナ内の
+# プロセスとホスト側の一般プロセス(make自体等)が同じUIDで見分けが付かない。
+# 代わりにdocker topでこのコンテナに属するPIDだけを正確に特定してkillする。
+KILL_ROS_PATTERN := (ros2|gz sim|gzserver|gzclient|ros_gz|rviz2|robot_state_publisher|nav2|component_container|teleop_twist_keyboard|ruby.*gz_tools)
 kill-ros:
-	$(EXEC) $(ROS2_SERVICE) bash -c \
-	  "pkill -9 -u root -f '$(KILL_ROS_PATTERN)' || true"
+	@pids="$$(docker top $(ROS2_CONTAINER) -eo pid,args 2>/dev/null | grep -E '$(KILL_ROS_PATTERN)' | awk '{print $$1}')"; \
+	if [ -n "$$pids" ]; then \
+	  $(EXEC) $(ROS2_SERVICE) bash -c "kill -9 $$pids" || true; \
+	fi
 
 # 次の行の `-e CMAKE_PREFIX_PATH=...` について:
 # iceoryx_binding_c等、amentに登録されない素のCMakeパッケージ($(ROS_INSTALL_PREFIX)/lib/<arch>/cmake/配下)は
@@ -122,11 +122,11 @@ colcon-build-clean-warn:
 # libcameraはedge/docker/Dockerfileでソースビルド済み(apt版と共存不可)のため、
 # rosdepがapt版を入れないよう--skip-keysで除外する。
 install-packages:
-	$(MAKE) colcon CMD_RUN="apt-get update && rosdep install --from-paths src --ignore-src -r -y --skip-keys=libcamera"
+	$(MAKE) colcon CMD_RUN="sudo -E apt-get update && sudo -E rosdep install --from-paths src --ignore-src -r -y --skip-keys=libcamera"
 
 # 詳細はedge/workspace/vendor.repos参照。
 vendor-import:
-	$(EXEC) $(ROS2_SERVICE) bash -c "git config --global --add safe.directory '*' && cd $(ROS2_WS) && vcs import src < vendor.repos"
+	$(EXEC) $(ROS2_SERVICE) bash -c "cd $(ROS2_WS) && vcs import src < vendor.repos"
 
 launch-urdf-display:
 	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/my_robot_description/urdf/$(FILENAME)"

@@ -101,3 +101,21 @@ EOF
 ENV TURTLEBOT3_MODEL=waffle
 
 WORKDIR /workspace
+
+# ホスト側とUID/GIDを合わせることで、bind mountされたsrc/にコンテナ内から書き込んだ
+# ファイルがホスト側から見てroot所有になる(≒ホスト側では書き込めなくなる)のを防ぐ。
+# apt-get/rosdep等システム権限が必要な操作は、実行時にdocker compose exec -u rootで
+# 個別に上書きする(Makefile参照)。ベースイメージ(Ubuntu 24.04)がUID/GID 1000に
+# 標準で"ubuntu"ユーザーを用意しているため、新規作成ではなくリネームする。
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN groupmod -n app -g ${USER_GID} ubuntu && \
+    usermod -l app -u ${USER_UID} -d /home/app -m -g app ubuntu && \
+    apt-get update && apt-get install -y sudo && rm -rf /var/lib/apt/lists/* && \
+    echo 'app ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/app && \
+    chmod 0440 /etc/sudoers.d/app && \
+    cp /root/.bashrc /home/app/.bashrc && \
+    cp -r /root/.ros /home/app/.ros && \
+    chown -R app:app /home/app /workspace
+
+USER app
