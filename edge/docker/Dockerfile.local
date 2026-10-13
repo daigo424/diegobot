@@ -46,9 +46,12 @@ RUN rosdep update
 
 # apt版joint_trajectory_controller(4.40.1)は同じくapt版のcontroller_interface(4.45.2)とABI不整合でon_init()がSEGVする
 # (packages.ros.org側の既知の不整合。ros-controls/ros2_control#2049)。ソースビルドで現行のcontroller_interfaceに合わせる。
-RUN git clone --branch ${ROS_DISTRO} --depth 1 \
-      https://github.com/ros-controls/ros2_controllers.git \
-      /opt/ros2_controllers_ws/src/ros2_controllers
+# ブランチ先頭に追従すると、aptのrealtime_toolsとAPIがずれてビルドが壊れる(JTCのtrySetFeedback)
+# ため、動作確認済みのコミットに固定する。
+RUN git init /opt/ros2_controllers_ws/src/ros2_controllers && \
+    cd /opt/ros2_controllers_ws/src/ros2_controllers && \
+    git fetch --depth 1 https://github.com/ros-controls/ros2_controllers.git 9b3ee3fcbee3cc524e65e770dca97732d1c14e02 && \
+    git checkout FETCH_HEAD
 
 RUN apt-get update && \
     . /opt/ros/${ROS_DISTRO}/setup.sh && \
@@ -61,9 +64,11 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
 
 # micro-ros-agentはjazzy含めどのdistroでもバイナリ(.deb)未リリース(index.ros.org上でRELEASEDだが各distro欄は空)。
 # ソースビルド必須。depend先のmicro_ros_msgsはバイナリ提供されているのでrosdepが自動解決する。
-RUN git clone --branch ${ROS_DISTRO} --depth 1 \
-      https://github.com/micro-ROS/micro-ROS-Agent.git \
-      /opt/micro_ros_agent_ws/src/micro-ROS-Agent
+# ブランチ先頭の変更でビルドが突然壊れないよう、動作確認済みのコミットに固定する。
+RUN git init /opt/micro_ros_agent_ws/src/micro-ROS-Agent && \
+    cd /opt/micro_ros_agent_ws/src/micro-ROS-Agent && \
+    git fetch --depth 1 https://github.com/micro-ROS/micro-ROS-Agent.git 7c932329ad5591ef23942ef1962534258c16b000 && \
+    git checkout FETCH_HEAD
 
 RUN apt-get update && \
     . /opt/ros/${ROS_DISTRO}/setup.sh && \

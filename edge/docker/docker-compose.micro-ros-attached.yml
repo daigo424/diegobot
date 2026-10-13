@@ -16,4 +16,4 @@ services:
     # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
     command: >
       bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
-      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 115200"
+      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 921600"

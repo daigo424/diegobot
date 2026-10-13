@@ -30,8 +30,8 @@ const int PWM_FREQ  = 20000; // 20kHz (可聴域外で静音化)
 const int PWM_RANGE = 255;   // 8bit相当 (0〜255)
 
 // 車体パラメータ
-const float WHEEL_BASE = 0.17;  // トレッド幅（左右輪の間隔: 約18cm）
-const float MAX_SPEED  = 0.5;   // 最大想定速度 (m/s)
+const float WHEEL_BASE_M  = 0.295f;  // トレッド幅（左右輪の接地点の中心間距離: 29.5cm）
+const float MAX_SPEED_MPS = 0.5f;   // 最大想定速度 (m/s)
 
 // --- ピン定義 (GY-521 / MPU6050) ---
 const int PIN_SDA = 20;
@@ -169,12 +169,12 @@ void subscription_callback(const void * msgin) {
   float angular_z = twist_msg->angular.z;  // 旋回角速度 (rad/s)
 
   // 差動二輪の運動学計算 (左右車輪の目標並進速度)
-  float left_vel  = linear_x - (angular_z * WHEEL_BASE / 2.0f);
-  float right_vel = linear_x + (angular_z * WHEEL_BASE / 2.0f);
+  float left_vel  = linear_x - (angular_z * WHEEL_BASE_M / 2.0f);
+  float right_vel = linear_x + (angular_z * WHEEL_BASE_M / 2.0f);
 
   // 速度から -1.0〜1.0 の比率へ正規化
-  float left_ratio  = left_vel / MAX_SPEED;
-  float right_ratio = right_vel / MAX_SPEED;
+  float left_ratio  = left_vel / MAX_SPEED_MPS;
+  float right_ratio = right_vel / MAX_SPEED_MPS;
 
   set_motor(PIN_PWMA, PIN_AIN1, PIN_AIN2, left_ratio);
   set_motor(PIN_PWMB, PIN_BIN1, PIN_BIN2, -right_ratio);
@@ -303,7 +303,7 @@ void publish_odom() {
   float right_dist = right_delta * METERS_PER_COUNT;
 
   float delta_center = (left_dist + right_dist) / 2.0f;
-  float delta_theta  = (right_dist - left_dist) / WHEEL_BASE;
+  float delta_theta  = (right_dist - left_dist) / WHEEL_BASE_M;
 
   // 区間中点でのthetaを使って積分することで、大きめの区間でも直線移動をわずかな
   // 円弧として近似でき、単純なオイラー積分より誤差が小さくなる。

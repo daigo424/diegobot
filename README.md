@@ -23,8 +23,8 @@ diegobot/
 ├── edge/
 │   ├── docker/         # ROS 2 Jazzy image, rosbridge, micro-ROS Agent compose definitions
 │   ├── workspace/      # ROS 2 workspace (colcon)
+│   ├── esp32/          # ESP32 firmware (PlatformIO). Production + verification test firmwares (currently in use)
 │   ├── pico/           # Pico firmware (PlatformIO). Production + verification test firmwares → edge/pico/README.md
-│   ├── esp32/          # Legacy ESP32 firmware (superseded by Pico)
 │   └── provisioning/   # Raspberry Pi initial-setup automation + BLE Wi-Fi provisioning daemon → edge/provisioning/README.md
 ├── mobile/              # Flutter app "diegoctl" (BLE provisioning + joystick teleop)
 ├── doc/                 # Hardware documentation (wiring, etc.)
@@ -47,14 +47,14 @@ Motor check:
 make teleop-twist-keyboard   # Drive by sending /cmd_vel from the keyboard
 ```
 
-The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (Pico) from `HOST_MICRO_ROS_PORT` in `.env`. The `/dev/ttyACM*` number can shift on replug/reflash, so check it each time.
+The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (the microcontroller) from `HOST_MICRO_ROS_PORT` in `.env`. The device number (`/dev/ttyUSB*` for the ESP32, `/dev/ttyACM*` for the Pico) can shift on replug/reflash, so check it each time.
 
-## Pico firmware
+## Microcontroller firmware
 
-`edge/pico/` holds a PlatformIO project with the production firmware plus several verification-test firmwares for individual motors etc. See [edge/pico/README.md](edge/pico/README.md) for how to switch between them and what each one does.
+The robot currently runs on the ESP32 (`edge/esp32/`). `edge/pico/` is the equivalent Raspberry Pi Pico firmware, kept as an alternative target. Both are PlatformIO projects with the same layout: `src/production/main.hpp` is the production firmware, and `src/motor/`, `src/imu/` hold verification-test firmwares (switch them by editing the `#include` in `src/main.cpp`). See [edge/pico/README.md](edge/pico/README.md) for what each test does.
 
 ```sh
-cd edge/pico
+cd edge/esp32
 pio run -t upload
 ```
 

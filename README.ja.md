@@ -15,8 +15,8 @@ diegobot/
 ├── edge/
 │   ├── docker/         # ROS 2 Jazzyイメージ・rosbridge・micro-ROS Agentのcompose定義
 │   ├── workspace/      # ROS 2ワークスペース(colcon)
+│   ├── esp32/          # ESP32ファームウェア(PlatformIO)。本番/動作確認テスト一式(現在使用中)
 │   ├── pico/           # Picoファームウェア(PlatformIO)。本番/動作確認テスト一式 → edge/pico/README.md
-│   ├── esp32/          # 旧ESP32版ファームウェア(レガシー。現在はPicoへ移行済み)
 │   └── provisioning/   # ラズパイの初期セットアップ自動化 + BLE Wi-Fiプロビジョニングデーモン → edge/provisioning/README.md
 ├── mobile/              # Flutterアプリ「diegoctl」(BLEプロビジョニング + ジョイスティック操縦)
 ├── doc/                 # 配線などハードウェアドキュメント
@@ -39,14 +39,14 @@ make vendor-import  # edge/workspace/vendor.reposに書かれたサードパー�
 make teleop-twist-keyboard   # キーボードで/cmd_velを送って走行確認
 ```
 
-`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(Pico)を`.env`の`HOST_MICRO_ROS_PORT`で指定する。`/dev/ttyACM*`の番号は抜き差しやreflashのたびにずれることがあるため、都度確認すること。
+`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(マイコン)を`.env`の`HOST_MICRO_ROS_PORT`で指定する。デバイス番号(ESP32は`/dev/ttyUSB*`、Picoは`/dev/ttyACM*`)は抜き差しやreflashのたびにずれることがあるため、都度確認すること。
 
-## Picoファームウェア
+## マイコンファームウェア
 
-`edge/pico/` にPlatformIOプロジェクトがあり、本番用ファームウェアに加えてモーター単体テスト等の動作確認用ファームウェアも一式入っている。切り替え方・各テストの内容は [edge/pico/README.md](edge/pico/README.md) を参照。
+現在はESP32(`edge/esp32/`)で動かしている。`edge/pico/`は同等機能のRaspberry Pi Pico版で、代替ターゲットとして残している。どちらも同じ構成のPlatformIOプロジェクトで、`src/production/main.hpp`が本番用、`src/motor/`・`src/imu/`が動作確認用ファームウェア(`src/main.cpp`の`#include`を切り替えて使う)。各テストの内容は [edge/pico/README.md](edge/pico/README.md) を参照。
 
 ```sh
-cd edge/pico
+cd edge/esp32
 pio run -t upload
 ```
 

@@ -13,7 +13,7 @@ diff_drive_controller:
     left_wheel_names: ["wheel_left_joint"]
     right_wheel_names: ["wheel_right_joint"]
 
-    wheel_separation: 0.16
+    wheel_separation: 0.295
     wheel_radius: 0.033
 
     publish_rate: 50.0

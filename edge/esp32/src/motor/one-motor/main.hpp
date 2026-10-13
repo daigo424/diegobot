@@ -2,10 +2,7 @@
 #define MAIN_HPP
 
 #include <Arduino.h>
-
-// エンコーダピン定義
-const int ENCODER_PIN_A = 18; // 黄色線 (D18)
-const int ENCODER_PIN_B = 19; // 緑色線 (D19)
+#include "../../pins.hpp"
 
 // パルスカウント用変数（割り込み内で更新するため volatile）
 volatile long encoder_ticks = 0;
@@ -14,8 +11,8 @@ unsigned long last_print_time = 0;
 
 // A相割り込みハンドラ
 void IRAM_ATTR handle_encoder_interrupt() {
-  int a_val = digitalRead(ENCODER_PIN_A);
-  int b_val = digitalRead(ENCODER_PIN_B);
+  int a_val = digitalRead(PIN_LEFT_ENC_A);
+  int b_val = digitalRead(PIN_LEFT_ENC_B);
 
   // A相の立ち上がり/立ち下がりとB相のレベルから回転方向を判定
   if (a_val == b_val) {
@@ -32,11 +29,11 @@ void _setup() {
   }
 
   // エンコーダピンを入力（プルアップ有効）に設定
-  pinMode(ENCODER_PIN_A, INPUT_PULLUP);
-  pinMode(ENCODER_PIN_B, INPUT_PULLUP);
+  pinMode(PIN_LEFT_ENC_A, INPUT_PULLUP);
+  pinMode(PIN_LEFT_ENC_B, INPUT_PULLUP);
 
   // A相の状態変化（立ち上がり・立ち下がりの両方）で割り込み
-  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), handle_encoder_interrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_LEFT_ENC_A), handle_encoder_interrupt, CHANGE);
 
   Serial.println("======================================");
   Serial.println("  ESP32 Encoder Test Ready!");
