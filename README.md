@@ -47,7 +47,7 @@ Motor check:
 make teleop-twist-keyboard   # Drive by sending /cmd_vel from the keyboard
 ```
 
-The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (the microcontroller) from `HOST_MICRO_ROS_PORT` in `.env`. The device number (`/dev/ttyUSB*` for the ESP32, `/dev/ttyACM*` for the Pico) can shift on replug/reflash, so check it each time.
+The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (the microcontroller) from `HOST_MICRO_ROS_PORT` in `.env`. Numbers like `/dev/ttyUSB*` can swap with the LiDAR depending on plug order, so specify the path under `/dev/serial/by-id/` instead (check with `ls -l /dev/serial/by-id/`).
 
 ## Microcontroller firmware
 

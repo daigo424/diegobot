@@ -50,7 +50,7 @@ graph LR
 
 - 接続: USBケーブル1本（ESP32のmicro-USBポート ⟷ ラズパイのUSB-Aポート）
 - 通信: micro-ROS（ESP32ボード上のUSB-UARTブリッジ経由のシリアル、921600baud。ファームの`MICRO_ROS_BAUD`と`micro-ros-agent`の`-b`を揃える）
-- Linux側デバイスパス: `/dev/ttyUSB*`。LiDAR(RPLIDAR C1)も同じ `/dev/ttyUSB*` 系で列挙されるため、抜き差しの順序で番号が入れ替わる。`.env` の `HOST_MICRO_ROS_PORT` / `HOST_LIDAR_PORT` を都度確認すること
+- Linux側デバイスパス: `/dev/ttyUSB*`。LiDAR(RPLIDAR C1)も同じ `/dev/ttyUSB*` 系で列挙されるため、抜き差しの順序で番号が入れ替わる。`.env` の `HOST_MICRO_ROS_PORT` / `HOST_LIDAR_PORT` には番号が変わらない `/dev/serial/by-id/` 配下のパスを指定する
 - ESP32への給電: このUSBケーブル経由のバスパワー（別電源不要）
 - 将来、USBを使わずラズパイのGPIO UARTと直結する場合に備え、**GPIO1(TXD0)・GPIO3(RXD0)は他の用途に割り当てず空けてある**
 

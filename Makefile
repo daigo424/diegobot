@@ -13,14 +13,14 @@ GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-wsl.yml
 else
 GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-native.yml
 endif
-# CAMERA/LIDAR/MICRO_ROS_ATTACHED=0でそれぞれのUSB/デバイスファイル無しでも起動できる
-# (無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
-# 実際に接続されているハードウェアだけをoverrideで足す)。個別指定が無ければROBOT_ATTACHED
-# (デフォルト1=実機フル接続前提)の値を引き継ぐ。
+# 無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
+# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROSは.envのデバイスパスが
+# 存在するかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
 ROBOT_ATTACHED     ?= 1
+_HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./.env 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
 CAMERA_ATTACHED    ?= $(ROBOT_ATTACHED)
-LIDAR_ATTACHED     ?= $(ROBOT_ATTACHED)
-MICRO_ROS_ATTACHED ?= $(ROBOT_ATTACHED)
+LIDAR_ATTACHED     ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_PORT)
+MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
 CAMERA_COMPOSE_FILE    := $(if $(filter 1,$(CAMERA_ATTACHED)),edge/docker/docker-compose.camera-attached.yml,)
 LIDAR_COMPOSE_FILE     := $(if $(filter 1,$(LIDAR_ATTACHED)),edge/docker/docker-compose.lidar-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
@@ -76,6 +76,12 @@ up-remote:
 # (カメラ・LiDARは実機側のものなので開発機には無い)。
 up-pico-remote:
 	$(MAKE) up ROBOT_ATTACHED=0 MICRO_ROS_ATTACHED=1
+
+# ラズパイ起動時にsystemd(edge/provisioning/diegobot.service.template)から呼ばれる。
+# Wi-Fi未接続でも起動できるようinstall-packagesは行わない。
+up-boot:
+	@test -f .env || cp .env.example .env
+	$(COMPOSE) --env-file .env up -d
 
 down:
 	$(COMPOSE) --env-file .env down
@@ -165,6 +171,12 @@ pi-ssh:
 	ssh $(PI_USER)@$(PI_HOST)
 pi-diagnose:
 	ssh $(PI_USER)@$(PI_HOST) bash -s < edge/provisioning/scripts/pi-diagnose.sh
+# 初回のラズパイにはmakeが無いことがあるため、ラズパイ上ではなく開発機からssh越しに実行する。
+# -tはsudoのパスワード入力用。
+pi-setup:
+	ssh -t $(PI_USER)@$(PI_HOST) 'cd ~/diegobot/edge/provisioning && sudo ./setup.sh'
+pi-setup-dev:
+	ssh -t $(PI_USER)@$(PI_HOST) 'cd ~/diegobot/edge/provisioning && sudo ./setup.dev.sh'
 FILE ?=
 pi-fetch:
 	scp $(PI_SSH_OPTS) $(PI_USER)@$(PI_HOST):$(FILE) .
@@ -182,7 +194,7 @@ ensure-arm64-emulation:
 	docker run --privileged --rm tonistiigi/binfmt --install arm64
 
 pi-build-image: ensure-arm64-emulation
-	docker buildx build --platform linux/arm64 -f edge/docker/Dockerfile -t $(PI_IMAGE_TAG) --load edge/docker
+	docker buildx build --platform linux/arm64 -f edge/docker/Dockerfile --build-context workspace=edge/workspace -t $(PI_IMAGE_TAG) --load edge/docker
 
 # rsyncとsshを別々に叩くと毎回パスワード入力が要るため、ControlMasterで最初の接続を
 # 使い回す(ControlPersistの間はマスター接続が生きたままになり、以降のrsync/sshはパスワード不要)。

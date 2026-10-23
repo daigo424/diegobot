@@ -5,6 +5,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Dockerfile側でsrc/のpackage.xmlからrosdep installするために渡す。
+      additional_contexts:
+        workspace: ../workspace
     image: diegobot:latest
     container_name: diegobot_container
     network_mode: host

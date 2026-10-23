@@ -2,6 +2,12 @@
 # ↑パーサーディレクティブはファイル最初の行でなければ無効になる(手前に他のコメントを
 # 置くとBuildKitはディレクティブ探索を止める)。RUN ... <<EOF のheredoc構文を使うために必要。
 
+# edge/workspace/src(compose/Makefileがworkspaceという名前付きビルドコンテキストとして渡す)から
+# package.xmlだけを抜き出す。src全体を持ち込むと、ソースを触るたびに後段のrosdep installが再実行されるため。
+FROM osrf/ros:jazzy-desktop AS workspace-package-xml
+COPY --from=workspace src /src
+RUN mkdir /out && cd /src && find . -name package.xml -exec cp --parents {} /out/ \;
+
 # 開発機(x86_64)専用。GUI/シミュレーションツール込みのosrf/ros:jazzy-desktopを使う。
 # このイメージはamd64ビルドしか配布されておらずラズパイ(arm64)では動かないため、
 # 実機向けビルドはDockerfile(ros:jazzy-ros-base、GUI無し)を使う。
@@ -11,7 +17,7 @@ RUN apt -y update
 RUN apt-get install -y x11-apps
 
 # moveit/moveit-py/controller-manager/ros2-controlはここでは入れない。src/以下の各package.xmlに
-# exec_depend/dependとして宣言済みで、コンテナ起動後のmake install-packages(rosdep)が拾う。
+# exec_depend/dependとして宣言済みで、後段のrosdep installが拾う。
 # ここに残すのはpackage.xmlで宣言しようがないもの(単体で叩くチュートリアル、ミドルウェア選択、開発ツール)だけ。
 # libcameraはsrc/vendor/camera_rosのビルド依存だが、実機用Dockerfileと違いこちらはソースビルド版を
 # 使わない(開発機にカメラは無くビルドが通ればよいため)ので、素直にapt版を入れる。
@@ -99,6 +105,12 @@ syntax on
 filetype plugin indent on
 au BufRead,BufNewFile *.xacro,*.urdf,*.world,*.sdf set filetype=xml
 EOF
+
+COPY --from=workspace-package-xml /out /tmp/workspace_src
+RUN apt-get update && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys=libcamera && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV TURTLEBOT3_MODEL=waffle
 

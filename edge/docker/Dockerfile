@@ -2,13 +2,19 @@
 # ↑パーサーディレクティブはファイル最初の行でなければ無効になる(手前に他のコメントを
 # 置くとBuildKitはディレクティブ探索を止める)。RUN ... <<EOF のheredoc構文を使うために必要。
 
+# edge/workspace/src(compose/Makefileがworkspaceという名前付きビルドコンテキストとして渡す)から
+# package.xmlだけを抜き出す。src全体を持ち込むと、ソースを触るたびに後段のrosdep installが再実行されるため。
+FROM ros:jazzy-ros-base AS workspace-package-xml
+COPY --from=workspace src /src
+RUN mkdir /out && cd /src && find . -name package.xml -exec cp --parents {} /out/ \;
+
 # 実機(ラズパイ、arm64)用。osrf/ros:jazzy-desktop系はamd64ビルドしか配布されておらず
 # arm64ではexec format errorになるため、公式のマルチアーキ(amd64/arm64)イメージを使う。
 # GUI/シミュレーションツール込みの開発機向けビルドはDockerfile.localを使う。
 FROM ros:jazzy-ros-base
 
 # moveit/moveit-py/controller-manager/ros2-controlはここでは入れない。src/以下の各package.xmlに
-# exec_depend/dependとして宣言済みで、コンテナ起動後のmake install-packages(rosdep)が拾う。
+# exec_depend/dependとして宣言済みで、後段のrosdep installが拾う。
 # ここに残すのはpackage.xmlで宣言しようがないもの(単体で叩くチュートリアル、ミドルウェア選択、開発ツール)だけ。
 RUN apt-get update && apt-get install -y \
       ros-${ROS_DISTRO}-teleop-twist-keyboard \
@@ -102,6 +108,12 @@ source /opt/micro_ros_agent_ws/install/setup.bash
 source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 test -f /workspace/install/setup.bash && source /workspace/install/setup.bash
 EOF
+
+COPY --from=workspace-package-xml /out /tmp/workspace_src
+RUN apt-get update && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys=libcamera && \
+    rm -rf /var/lib/apt/lists/*
 
 ENV TURTLEBOT3_MODEL=waffle
 

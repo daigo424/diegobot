@@ -39,7 +39,7 @@ make vendor-import  # edge/workspace/vendor.reposに書かれたサードパー�
 make teleop-twist-keyboard   # キーボードで/cmd_velを送って走行確認
 ```
 
-`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(マイコン)を`.env`の`HOST_MICRO_ROS_PORT`で指定する。デバイス番号(ESP32は`/dev/ttyUSB*`、Picoは`/dev/ttyACM*`)は抜き差しやreflashのたびにずれることがあるため、都度確認すること。
+`edge/docker/docker-compose.yml`の`micro-ros-agent`サービスは、ホストのUSBシリアルポート(マイコン)を`.env`の`HOST_MICRO_ROS_PORT`で指定する。`/dev/ttyUSB*`等の番号は抜き差しの順序でLiDARと入れ替わることがあるため、`/dev/serial/by-id/`配下のパスで指定する(`ls -l /dev/serial/by-id/`で確認)。
 
 ## マイコンファームウェア
 

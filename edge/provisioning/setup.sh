@@ -3,7 +3,7 @@
 #
 # 量産を見据え、まっさらなラズパイを diegobot が動く状態まで持っていく手順を
 # できるだけこの1本に集約する。Docker導入、AMR BLE Wi-Fiプロビジョニングデーモンの
-# インストール、systemdサービスとしての常駐化を行う。
+# インストール、systemdサービスとしての常駐化、起動時のコンテナ自動起動の登録を行う。
 #
 # 使い方:
 #   cd ~/diegobot/edge/provisioning
@@ -16,6 +16,7 @@ set -euo pipefail
 # --- 設定値。環境に合わせて必要ならここだけ書き換える ---
 SERVICE_USER="root"          # サービスを実行するOSユーザー。rootにしたい場合は "root" に変更
 SERVICE_NAME="amr-provisioning.service"
+CONTAINERS_SERVICE_NAME="diegobot.service"
 
 # --- 事前チェック ---
 if [[ ${EUID} -ne 0 ]]; then
@@ -28,8 +29,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="${SCRIPT_DIR}/venv"
 SERVICE_TEMPLATE="${SCRIPT_DIR}/${SERVICE_NAME}.template"
 SERVICE_DEST="/etc/systemd/system/${SERVICE_NAME}"
+REPO_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+CONTAINERS_SERVICE_TEMPLATE="${SCRIPT_DIR}/${CONTAINERS_SERVICE_NAME}.template"
+CONTAINERS_SERVICE_DEST="/etc/systemd/system/${CONTAINERS_SERVICE_NAME}"
 
-echo "==> [1/7] Dockerをインストール（未インストール時のみ）"
+echo "==> [1/8] Dockerをインストール（未インストール時のみ）"
 if ! command -v docker &>/dev/null; then
   curl -fsSL https://get.docker.com | sh
   systemctl enable --now docker
@@ -44,27 +48,27 @@ if [[ -n "${INVOKING_USER}" ]] && id "${INVOKING_USER}" &>/dev/null; then
   usermod -aG docker "${INVOKING_USER}"
 fi
 
-echo "==> [2/7] APT依存関係をインストール"
+echo "==> [2/8] APT依存関係をインストール"
 # PyGObject/dbus-pythonはCPython拡張でpip installがソースビルドになるため、
 # ビルドに必要なヘッダ類が無いと venv 内の pip install がそのまま失敗する。
 apt-get update
 apt-get install -y --no-install-recommends \
-  python3-venv python3-dev pkg-config \
+  make python3-venv python3-dev pkg-config \
   libgirepository1.0-dev libcairo2-dev libdbus-1-dev libdbus-glib-1-dev
 
-echo "==> [3/7] Python仮想環境を作成 (${VENV_DIR})"
+echo "==> [3/8] Python仮想環境を作成 (${VENV_DIR})"
 python3 -m venv "${VENV_DIR}"
 "${VENV_DIR}/bin/pip" install --upgrade pip
 "${VENV_DIR}/bin/pip" install -r "${SCRIPT_DIR}/requirements.txt"
 
-echo "==> [4/7] ${SERVICE_USER} を bluetooth グループへ追加"
+echo "==> [4/8] ${SERVICE_USER} を bluetooth グループへ追加"
 if id "${SERVICE_USER}" &>/dev/null; then
   usermod -aG bluetooth "${SERVICE_USER}"
 else
   echo "警告: ユーザー ${SERVICE_USER} が存在しません。SERVICE_USER の設定を確認してください。" >&2
 fi
 
-echo "==> [5/7] systemdサービスファイルを生成"
+echo "==> [5/8] systemdサービスファイルを生成"
 if [[ ! -f "${SERVICE_TEMPLATE}" ]]; then
   echo "エラー: テンプレートが見つかりません: ${SERVICE_TEMPLATE}" >&2
   exit 1
@@ -76,13 +80,28 @@ sed \
   -e "s|__SERVICE_USER__|${SERVICE_USER}|g" \
   "${SERVICE_TEMPLATE}" > "${SERVICE_DEST}"
 
-echo "==> [6/7] systemdへ登録・有効化"
+echo "==> [6/8] systemdへ登録・有効化"
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}"
 
-echo "==> [7/7] 完了。以下で状態を確認できます:"
+echo "==> [7/8] 起動時にコンテナを自動起動するsystemdサービスを登録"
+# rootで動かすとbind mount先に作られるファイルがroot所有になるため、ログインユーザーで動かす。
+if [[ -n "${INVOKING_USER}" ]]; then
+  sed \
+    -e "s|__REPO_DIR__|${REPO_DIR}|g" \
+    -e "s|__SERVICE_USER__|${INVOKING_USER}|g" \
+    "${CONTAINERS_SERVICE_TEMPLATE}" > "${CONTAINERS_SERVICE_DEST}"
+  systemctl daemon-reload
+  # --nowは付けない(初回はdockerグループ反映前やイメージ未取得のことがあるため、次回起動から有効)。
+  systemctl enable "${CONTAINERS_SERVICE_NAME}"
+else
+  echo "警告: sudo経由で実行されていないため ${CONTAINERS_SERVICE_NAME} の登録をスキップします。" >&2
+fi
+
+echo "==> [8/8] 完了。以下で状態を確認できます:"
 echo "    sudo systemctl status ${SERVICE_NAME}"
 echo "    journalctl -u ${SERVICE_NAME} -f"
+echo "    sudo systemctl status ${CONTAINERS_SERVICE_NAME}"
 if [[ -n "${INVOKING_USER}" ]]; then
   echo "    (dockerグループの反映には ${INVOKING_USER} の再ログインが必要です)"
 fi

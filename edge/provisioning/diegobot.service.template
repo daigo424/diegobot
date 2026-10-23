@@ -1,0 +1,15 @@
+[Unit]
+Description=diegobot ROS 2 containers
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=__SERVICE_USER__
+WorkingDirectory=__REPO_DIR__
+ExecStart=/usr/bin/make up-boot
+ExecStop=/usr/bin/make down
+
+[Install]
+WantedBy=multi-user.target
