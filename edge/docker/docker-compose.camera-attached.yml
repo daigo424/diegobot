@@ -4,8 +4,14 @@ services:
       # libcameraはudev経由でカメラのメディアデバイスを列挙するため、コンテナにも
       # ホストのudevデータベースが見える必要がある(無いと/dev/media*があってもカメラを発見できない)。
       - /run/udev:/run/udev:ro
+      - /dev/bus/usb:/dev/bus/usb
     # libcameraはIPA(画像処理アルゴリズム)を別プロセスにfork/execして分離する設計で、
     # DockerのデフォルトseccompプロファイルだとこのforkがENOSYS("Function not implemented")
     # で失敗する。seccompを外して許可する。
     security_opt:
       - seccomp:unconfined
+    # HP60C(深度カメラ)はV4L2ではなくlibusbで直接USBデバイスを開くため、/dev/bus/usbを渡す。
+    # devices:で渡すとコンテナ作成時点のデバイスしか許可されず抜き差しで見えなくなるため、
+    # ディレクトリをマウントしてUSBのデバイス番号(メジャー189)ごと許可する。
+    device_cgroup_rules:
+      - 'c 189:* rmw'

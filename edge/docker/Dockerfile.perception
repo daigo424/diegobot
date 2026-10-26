@@ -1,0 +1,68 @@
+# syntax=docker/dockerfile:1
+
+# サーバー(開発機、x86_64 + NVIDIA GPU)で物体検出などの重い処理を動かすコンテナ用。
+# PyTorch/CUDAは数GBあり依存の組み合わせも厳しいため、開発用(Dockerfile.local)とは別イメージにする。
+FROM ros:jazzy-ros-base AS workspace-package-xml
+COPY --from=workspace src/amr_perception/package.xml /out/amr_perception/package.xml
+
+FROM ros:jazzy-ros-base
+
+RUN apt-get update && apt-get install -y \
+      ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
+      python3-venv \
+      git \
+      sudo \
+    && rm -rf /var/lib/apt/lists/*
+ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Ubuntu 24.04のシステムPythonにはpipで直接入れられない(PEP 668)ためvenvに入れる。
+# numpyはROS Jazzyのメッセージ型(C拡張)がnumpy 1.x向けにビルドされているため2.x系を入れない。
+RUN python3 -m venv --system-site-packages /opt/perception-venv && \
+    /opt/perception-venv/bin/pip install --no-cache-dir \
+      "numpy<2" \
+      torch==2.14.1 \
+      ultralytics==8.4.175
+# YOLOEで検出対象を文字で指定する(set_classes)際に要る。Ultralyticsは無いと実行時にpipで入れようとするが、
+# システムのPythonへのpip installはPEP 668で拒否されて失敗するため、あらかじめ入れておく。
+RUN /opt/perception-venv/bin/pip install --no-cache-dir \
+      git+https://github.com/ultralytics/CLIP.git@7ffa84b3bfa40c42ecc1c77147a855e69cb2dd40
+# TensorRTエンジンへの書き出し(model.export(format="engine"))に要る。同じ理由で実行時の自動インストールに頼らない。
+# onnxruntimeは書き出し途中のONNXの検証にしか使わないため、CUDAライブラリを抱えないCPU版にする。
+# TensorRT 11はFP16化にNVIDIA ModelOpt(CUDA 12版cupy・旧onnxを要求)が必要になるため、ビルダーのFP16指定で済む10系にする。
+RUN /opt/perception-venv/bin/pip install --no-cache-dir \
+      "numpy<2" \
+      onnx==1.23.2 \
+      onnxslim==0.1.98 \
+      onnxruntime==1.31.0 \
+      tensorrt-cu13==10.16.1.11
+# colconが生成するノードの起動スクリプトはシステムの/usr/bin/python3を直接使うため、
+# venvを有効化するのではなく、venvのパッケージをシステムのPythonから見えるようにする。
+ENV PYTHONPATH=/opt/perception-venv/lib/python3.12/site-packages
+
+# package.xmlを触るたびにPyTorchの入れ直しが走らないよう、pip installより後に置く。
+COPY --from=workspace-package-xml /out /tmp/workspace_src
+RUN apt-get update && \
+    . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN cat >> /etc/bash.bashrc <<'EOF'
+source /opt/ros/${ROS_DISTRO}/setup.bash
+# setup.bashはビルドしたdiegobotコンテナ側の下位ワークスペースまで読みに行き、ここには無いため警告になる。
+test -f /workspace/install/local_setup.bash && source /workspace/install/local_setup.bash
+EOF
+
+WORKDIR /workspace
+
+# bind mountした/data等にコンテナ内から書いたファイルが、ホスト側から見てroot所有になるのを防ぐ。
+# ~/.configはUltralyticsが設定ファイルを置く場所で、無いと書込不可とみなされ/tmpに置かれて毎回消える。
+ARG USER_UID=1000
+ARG USER_GID=1000
+RUN groupmod -n app -g ${USER_GID} ubuntu && \
+    usermod -l app -u ${USER_UID} -d /home/app -m -g app ubuntu && \
+    echo 'app ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/app && \
+    chmod 0440 /etc/sudoers.d/app && \
+    mkdir -p /home/app/.config && \
+    chown -R app:app /workspace /home/app/.config
+
+USER app

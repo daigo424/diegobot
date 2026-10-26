@@ -1,0 +1,30 @@
+# サーバー(開発機)側でだけ動かす、物体検出等の重い処理用コンテナ。
+# ラズパイ(arm64)ではMakefileがこのファイルを合成しない。
+services:
+  perception:
+    build:
+      context: .
+      dockerfile: Dockerfile.perception
+      additional_contexts:
+        workspace: ../workspace
+    image: diegobot-perception:latest
+    container_name: diegobot_perception
+    network_mode: host
+    ipc: host
+    tty: true
+    stdin_open: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+    volumes:
+      - ../workspace:/workspace
+      # 学習済みモデルの置き場(/data/models)。初回起動時に自動でダウンロードされる。
+      - ../../data:/data
+    working_dir: /workspace
+    restart: unless-stopped

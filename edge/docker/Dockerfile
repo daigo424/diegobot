@@ -4,9 +4,10 @@
 
 # edge/workspace/src(compose/Makefileがworkspaceという名前付きビルドコンテキストとして渡す)から
 # package.xmlだけを抜き出す。src全体を持ち込むと、ソースを触るたびに後段のrosdep installが再実行されるため。
+# サーバー側でだけ動かすパッケージ(MakefileのSERVER_PKGS)の依存は入れない。
 FROM ros:jazzy-ros-base AS workspace-package-xml
 COPY --from=workspace src /src
-RUN mkdir /out && cd /src && find . -name package.xml -exec cp --parents {} /out/ \;
+RUN mkdir /out && cd /src && find . -path ./amr_perception -prune -o -name package.xml -exec cp --parents {} /out/ \;
 
 # 実機(ラズパイ、arm64)用。osrf/ros:jazzy-desktop系はamd64ビルドしか配布されておらず
 # arm64ではexec format errorになるため、公式のマルチアーキ(amd64/arm64)イメージを使う。
@@ -109,10 +110,12 @@ source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 test -f /workspace/install/setup.bash && source /workspace/install/setup.bash
 EOF
 
+# roscpp/rospy/catkinはvendor/angstrong/ascamera(HP60Cドライバ)のpackage.xmlに残るROS 1の宣言で、
+# Jazzyでは解決できずrosdepが失敗するため除外する(ビルド自体はament_cmakeで行われ不要)。
 COPY --from=workspace-package-xml /out /tmp/workspace_src
 RUN apt-get update && \
     . /opt/ros/${ROS_DISTRO}/setup.sh && \
-    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys=libcamera && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys="libcamera roscpp rospy catkin" && \
     rm -rf /var/lib/apt/lists/*
 
 ENV TURTLEBOT3_MODEL=waffle

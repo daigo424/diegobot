@@ -106,10 +106,12 @@ filetype plugin indent on
 au BufRead,BufNewFile *.xacro,*.urdf,*.world,*.sdf set filetype=xml
 EOF
 
+# roscpp/rospy/catkinはvendor/angstrong/ascamera(HP60Cドライバ)のpackage.xmlに残るROS 1の宣言で、
+# Jazzyでは解決できずrosdepが失敗するため除外する(ビルド自体はament_cmakeで行われ不要)。
 COPY --from=workspace-package-xml /out /tmp/workspace_src
 RUN apt-get update && \
     . /opt/ros/${ROS_DISTRO}/setup.sh && \
-    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys=libcamera && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys="libcamera roscpp rospy catkin" && \
     rm -rf /var/lib/apt/lists/*
 
 ENV TURTLEBOT3_MODEL=waffle

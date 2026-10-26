@@ -46,7 +46,14 @@ else
 CAMERA_DEVICES_COMPOSE_FILE :=
 endif
 
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+# 物体検出等のサーバー側処理用コンテナ(NVIDIA GPU前提)。ラズパイでは動かさない。
+ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
+PERCEPTION_COMPOSE_FILE :=
+else
+PERCEPTION_COMPOSE_FILE := edge/docker/docker-compose.perception.yml
+endif
+
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
@@ -57,6 +64,21 @@ ROS_INSTALL_PREFIX := /opt/ros/$(ROS_DISTRO)
 MOBILE_DIR         := mobile
 PKG                ?=
 PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
+# サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
+# (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
+SERVER_PKGS        := amr_perception
+ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
+WS_SRC_PATHS       := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
+# ラズパイ(RAM 2GB)ではPCL/rclcppを含むC++の1ファイルのコンパイルにDebugで約1.5GB、Releaseで約1GB要り、
+# 並列に走らせたりDebugにするとスワップで固まる。パッケージは1つずつ、コンパイラはBUILD_JOBS個まで、Releaseでビルドする。
+BUILD_JOBS         ?= 1
+COLCON_BUILD_TYPE  := Release
+COLCON_BUILD_LIMIT := MAKEFLAGS=-j$(BUILD_JOBS)
+COLCON_BUILD_LIMIT_ARGS := --parallel-workers 1
+else
+WS_SRC_PATHS       := src
+COLCON_BUILD_TYPE  := Debug
+endif
 COLCON_SELECT      := $(if $(PKG_NAME),--packages-select $(PKG_NAME),)
 CMD_ROS2_SOURCE    := source $(ROS_INSTALL_PREFIX)/setup.bash && source /opt/ros2_controllers_ws/install/setup.bash && source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 CMD_ROS2_WS_SOURCE := test -f $(ROS2_WS)/install/setup.bash && source $(ROS2_WS)/install/setup.bash || true
@@ -92,15 +114,21 @@ build:
 login:
 	$(EXEC) $(ROS2_SERVICE) bash
 
+# サーバー側の処理(点群生成・物体検出)を起動する。ノード本体はdiegobotコンテナでcolcon buildしたものを使う。
+# MODELで検出モデルを差し替えられる(例: make perception MODEL=yoloe-26s-seg-pf.engine)。
+MODEL ?=
+perception:
+	$(EXEC) perception bash -c "source $(ROS_INSTALL_PREFIX)/setup.bash && source $(ROS2_WS)/install/local_setup.bash && ros2 launch amr_perception perception.launch.py $(if $(MODEL),model:=$(MODEL))"
+
 # ros2 launchで起動したプロセスをCtrl+Cせず再起動すると、gz sim(rubyラッパー)や
 # ros_gz_bridge系ノードが孤児化して残り続けることがある(SIGINTがlaunchの子孫全員に
 # 伝播しないケース)。それらをまとめてSIGKILLで掃除する。
 # docker-compose.ymlのpid: hostによりホストとPID空間を共有しているため、コンテナ内の
 # プロセスとホスト側の一般プロセス(make自体等)が同じUIDで見分けが付かない。
 # 代わりにdocker topでこのコンテナに属するPIDだけを正確に特定してkillする。
-KILL_ROS_PATTERN := (ros2|gz sim|gzserver|gzclient|ros_gz|rviz2|robot_state_publisher|nav2|component_container|teleop_twist_keyboard|ruby.*gz_tools)
+KILL_ROS_PATTERN := (ros2|gz sim|gzserver|gzclient|ros_gz|rviz2|robot_state_publisher|nav2|component_container|ascamera_node|teleop_twist_keyboard|ruby.*gz_tools)
 kill-ros:
-	@pids="$$(docker top $(ROS2_CONTAINER) -eo pid,args 2>/dev/null | grep -E '$(KILL_ROS_PATTERN)' | awk '{print $$1}')"; \
+	@pids="$$(docker top $(ROS2_CONTAINER) -eo pid,args 2>/dev/null | grep -E '$(KILL_ROS_PATTERN)' | awk '{print $$1}' | tr '\n' ' ')"; \
 	if [ -n "$$pids" ]; then \
 	  $(EXEC) $(ROS2_SERVICE) bash -c "kill -9 $$pids" || true; \
 	fi
@@ -118,8 +146,10 @@ colcon:
 # CLEAN=1でbuild/install/log/compile_commands.jsonを削除してからビルドする。
 COLCON_BUILD_CLEAN := $(if $(CLEAN),rm -rf build/ install/ log/ compile_commands.json &&,)
 COLCON_BUILD_WARN := -DCMAKE_WARN_DEPRECATED=$(if $(WARN),ON,OFF)
+# status-は進行状況の行表示を切る。colcon-notification 0.3.2以降はこの表示の消去処理が再入して
+# TypeErrorになり、ビルドが途中で打ち切られることがある。
 colcon-build:
-	$(MAKE) colcon CMD_RUN="$(COLCON_BUILD_CLEAN) bear --append -- colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(COLCON_BUILD_WARN) --no-warn-unused-cli $(COLCON_SELECT)"
+	$(MAKE) colcon CMD_RUN="$(COLCON_BUILD_CLEAN) $(COLCON_BUILD_LIMIT) bear --append -- colcon build --event-handlers status- $(COLCON_BUILD_LIMIT_ARGS) --symlink-install --base-paths $(WS_SRC_PATHS) --cmake-args -DCMAKE_BUILD_TYPE=$(COLCON_BUILD_TYPE) -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(COLCON_BUILD_WARN) --no-warn-unused-cli $(COLCON_SELECT)"
 colcon-build-clean:
 	$(MAKE) colcon-build CLEAN=1
 colcon-build-clean-warn:
@@ -128,7 +158,7 @@ colcon-build-clean-warn:
 # libcameraはedge/docker/Dockerfileでソースビルド済み(apt版と共存不可)のため、
 # rosdepがapt版を入れないよう--skip-keysで除外する。
 install-packages:
-	$(MAKE) colcon CMD_RUN="sudo -E apt-get update && sudo -E rosdep install --from-paths src --ignore-src -r -y --skip-keys=libcamera"
+	$(MAKE) colcon CMD_RUN="sudo -E apt-get update && sudo -E rosdep install --from-paths $(WS_SRC_PATHS) --ignore-src -r -y --skip-keys='libcamera roscpp rospy catkin'"
 
 # 詳細はedge/workspace/vendor.repos参照。
 vendor-import:
@@ -164,9 +194,11 @@ pi-rsync:
 	  --exclude=edge/workspace/log/ \
 	  --exclude=edge/workspace/core \
 	  --exclude=edge/workspace/core.* \
-	  --exclude=edge/workspace/src/vendor/ \
+	  --include=edge/workspace/src/vendor/ \
+	  --include=edge/workspace/src/vendor/angstrong/*** \
+	  --exclude=edge/workspace/src/vendor/* \
 	  ./ $(PI_USER)@$(PI_HOST):~/diegobot
-	@echo "vendor/(vcstool管理の外部パッケージ)は転送していません。ラズパイ側で 'make vendor-import' を実行してください"
+	@echo "vendor/のうちvcstool管理の外部パッケージは転送していません。ラズパイ側で 'make vendor-import' を実行してください"
 pi-ssh:
 	ssh $(PI_USER)@$(PI_HOST)
 pi-diagnose:

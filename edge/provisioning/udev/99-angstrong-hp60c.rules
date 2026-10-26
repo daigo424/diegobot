@@ -1,0 +1,3 @@
+# Angstrong HP60C深度カメラ。ドライバ(ascamera)はコンテナ内の一般ユーザーからlibusbで
+# 直接開くため、ホスト側でデバイスノードを読み書き可能にしておく。
+SUBSYSTEMS=="usb", ATTRS{idVendor}=="3482", ATTRS{idProduct}=="6723", MODE="0666"

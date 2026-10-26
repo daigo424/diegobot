@@ -17,7 +17,7 @@ BLE経由のWi-Fiプロビジョニングデーモン（Dockerコンテナの外
    make pi-setup
    ```
 
-   `setup.sh` が行うこと: Docker導入（未インストール時のみ、ログインユーザーをdockerグループへ追加） → APT依存関係インストール → venv作成・依存ライブラリインストール → 実行ユーザーをbluetoothグループへ追加 → systemdサービス登録・起動 → 起動時のコンテナ自動起動サービス(`diegobot.service`)登録。
+   `setup.sh` が行うこと: Docker導入（未インストール時のみ、ログインユーザーをdockerグループへ追加） → APT依存関係インストール → venv作成・依存ライブラリインストール → 実行ユーザーをbluetoothグループへ追加 → systemdサービス登録・起動 → USBデバイス(深度カメラ等)のudevルール導入 → 起動時のコンテナ自動起動サービス(`diegobot.service`)登録。
 
    Dockerグループの追加を反映させるには、実行後に一度SSHセッションを繋ぎ直す（再ログインする）必要がある。
 
