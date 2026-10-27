@@ -7,34 +7,38 @@ default_acceleration_scaling_factor: 0.1
 
 # Specific joint properties can be changed with the keys [max_position, min_position, max_velocity, max_acceleration]
 # Joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
+
+# Hand-tuned after MoveIt Setup Assistant (regenerating overwrites these):
+# max_velocity is the STS3215 (12V) no-load speed of 0.222 s/60°.
+# max_acceleration is provisional. AddTimeOptimalParameterization cannot build a trajectory if any joint lacks an acceleration limit.
 joint_limits:
   elbow_flex:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
   gripper:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
   shoulder_lift:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
   shoulder_pan:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
   wrist_flex:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
   wrist_roll:
     has_velocity_limits: true
-    max_velocity: 10
-    has_acceleration_limits: false
-    max_acceleration: 0
+    max_velocity: 4.7
+    has_acceleration_limits: true
+    max_acceleration: 5.0
