@@ -7,8 +7,12 @@
     <xacro:include filename="chassis_base.urdf.xacro" />
     <xacro:include filename="so101_new_calib.urdf.xacro" />
     <xacro:include filename="nuwa_hp60c.urdf.xacro" />
-    <xacro:include filename="nuwa_hp60c_gazebo.urdf.xacro" />
-    <xacro:include filename="ros2_control.urdf" />
+
+    <xacro:arg name="use_gazebo" default="true"/>
+    <xacro:if value="$(arg use_gazebo)">
+        <xacro:include filename="nuwa_hp60c_gazebo.urdf.xacro" />
+        <xacro:include filename="ros2_control.urdf" />
+    </xacro:if>
 
     <joint name="${namespace}arm_mount_joint" type="fixed">
         <origin xyz="-0.047 0 0.0915" rpy="0 0 0"/>

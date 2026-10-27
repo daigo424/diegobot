@@ -1,0 +1,25 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: amr_description
+    relative_path: urdf/amr.urdf.xacro
+  srdf:
+    relative_path: config/amr.srdf
+  package_settings:
+    author_name: daigo424
+    author_email: ishii.daigo@gmail.com
+    generated_timestamp: 1793108440
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity
+  modified_urdf:
+    xacros:
+      - control_xacro
+  control_xacro:
+    command:
+      - position
+    state:
+      - position
+      - velocity

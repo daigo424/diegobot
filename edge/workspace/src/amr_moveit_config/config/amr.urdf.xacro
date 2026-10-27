@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="amr">
+    <xacro:arg name="initial_positions_file" default="initial_positions.yaml" />
+
+    <xacro:arg name="use_gazebo" default="false" />
+
+    <!-- Import amr urdf file -->
+    <xacro:include filename="$(find amr_description)/urdf/amr.urdf.xacro" />
+
+    <!-- Import control_xacro -->
+    <xacro:include filename="amr.ros2_control.xacro" />
+
+
+    <xacro:amr_ros2_control name="FakeSystem" initial_positions_file="$(arg initial_positions_file)"/>
+
+</robot>
