@@ -175,10 +175,15 @@ launch-my-robot-description-display:
 use-controller:
 	$(MAKE) colcon CMD_RUN="ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel -p stamped:=true"
 
+# シミュレーションのSO101の関節角[rad]。J1〜J6はshoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripperの順。
 J1 ?= 0.0
 J2 ?= 0.0
+J3 ?= 0.0
+J4 ?= 0.0
+J5 ?= 0.0
+J6 ?= 0.0
 pub-arm-joints:
-	$(MAKE) colcon CMD_RUN="ros2 topic pub -1 /arm_joints_controller/commands std_msgs/msg/Float64MultiArray '{data: [$(J1), $(J2)]}'"
+	$(MAKE) colcon CMD_RUN="ros2 topic pub -1 /arm_controller/commands std_msgs/msg/Float64MultiArray '{data: [$(J1), $(J2), $(J3), $(J4), $(J5), $(J6)]}'"
 tf-tree-pdf:
 	$(MAKE) colcon CMD_RUN="ros2 run tf2_tools view_frames"
 tf-tree:

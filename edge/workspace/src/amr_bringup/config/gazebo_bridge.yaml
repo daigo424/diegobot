@@ -4,14 +4,28 @@
   gz_type_name: "gz.msgs.Clock"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "/camera/image_raw"
-  gz_topic_name: "/camera"
+# 実機のHP60C(ascamera)と同じトピック名にする。Gazeboは深度をRGBと同じ画角で出すため、camera_infoは共通。
+# Gazeboの点群(/camera/points)はX前方の座標で出るのに、frame_idは画像に合わせた光学座標系になるため流さない。
+- ros_topic_name: "/camera/camera/color/image_raw"
+  gz_topic_name: "/camera/image"
   ros_type_name: "sensor_msgs/msg/Image"
   gz_type_name: "gz.msgs.Image"
   direction: GZ_TO_ROS
 
-- ros_topic_name: "/camera/camera_info"
-  gz_topic_name: "/camera_info"
+- ros_topic_name: "/camera/camera/color/camera_info"
+  gz_topic_name: "/camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/camera/camera/depth/image_raw"
+  gz_topic_name: "/camera/depth_image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/camera/camera/depth/camera_info"
+  gz_topic_name: "/camera/camera_info"
   ros_type_name: "sensor_msgs/msg/CameraInfo"
   gz_type_name: "gz.msgs.CameraInfo"
   direction: GZ_TO_ROS

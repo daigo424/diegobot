@@ -5,7 +5,7 @@
   <version>0.0.0</version>
   <description>Server-side perception for diegobot: processes sensor data streamed from the robot.</description>
   <maintainer email="ishii.daigo@gmail.com">daigo424</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

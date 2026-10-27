@@ -1,0 +1,55 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="namespace" default=""/>
+  <xacro:property name="namespace" value="$(arg namespace)"/>
+
+  <!-- カメラマウントの取付位置と姿勢 -->
+  <xacro:property name="camera_mount_xyz" value="-0.0015 0.045 -0.044"/>
+  <xacro:property name="camera_mount_rpy" value="${-pi/180*87} 0 ${pi/2}"/>
+
+  <!-- カメラの取付位置と姿勢 -->
+  <xacro:property name="camera_xyz" value="0.0015 -0.005 0"/>
+  <xacro:property name="camera_rpy" value="${pi/2} ${pi/180*2} ${pi/180*110}"/>
+
+  <joint name="${namespace}arm_camera_mount_joint" type="fixed">
+    <origin xyz="${camera_mount_xyz}" rpy="${camera_mount_rpy}"/>
+    <parent link="${namespace}gripper_link"/>
+    <child link="${namespace}arm_camera_mount_link"/>
+  </joint>
+
+  <link name="${namespace}arm_camera_mount_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/arm_camera_mount.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="3d_printed"/>
+    </visual>
+  </link>
+
+  <joint name="hp60c_joint" type="fixed">
+    <origin xyz="${camera_xyz}" rpy="${camera_rpy}"/>
+    <parent link="${namespace}arm_camera_mount_link"/>
+    <child link="${namespace}hp60c_link"/>
+  </joint>
+
+  <link name="${namespace}hp60c_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/camera_NUWA_HP60C.stl" scale="0.0001 0.0001 0.0001"/>
+      </geometry>
+      <material name="dark"/>
+    </visual>
+  </link>
+
+  <!-- ドライバ(ascamera)は画像・点群をこのフレームの子(camera_color_0等)としてTFを出すため、名前を合わせる。
+       名前はノードの名前空間とカメラ番号から決まる(名前空間camera、0番)。光学座標系(Z=奥行き,X=右,Y=下)。 -->
+  <joint name="${namespace}hp60c_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    <parent link="${namespace}hp60c_link"/>
+    <child link="${namespace}camera_camera_link_0"/>
+  </joint>
+  <link name="${namespace}camera_camera_link_0"/>
+
+</robot>

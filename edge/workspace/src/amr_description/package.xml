@@ -3,9 +3,10 @@
 <package format="3">
   <name>amr_description</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="root@todo.todo">root</maintainer>
-  <license>TODO: License declaration</license>
+  <description>URDF and meshes for diegobot (differential-drive base with an SO-101 arm and a Nuwa-HP60C RGB-D camera)</description>
+  <maintainer email="ishii.daigo@gmail.com">daigo424</maintainer>
+  <license>MIT</license>
+  <license file="LICENSE-Apache-2.0">Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

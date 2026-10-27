@@ -9,8 +9,11 @@ endif()
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY urdf launch rviz
+  DIRECTORY meshes urdf launch rviz
   DESTINATION share/${PROJECT_NAME}/
 )
+
+# Gazeboはpackage://をmodel://に読み替え、GZ_SIM_RESOURCE_PATHからメッシュを探す。
+ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/${PROJECT_NAME}.dsv.in")
 
 ament_package()

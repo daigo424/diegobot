@@ -1,8 +1,35 @@
 <?xml version="1.0"?>
 <robot name="amr" xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:arg name="namespace" default=""/>
+    <xacro:property name="namespace" value="$(arg namespace)"/>
+
     <xacro:include filename="common_properties.xacro" />
-    <xacro:include filename="turtlebot3_burger.urdf" />
-    <xacro:include filename="imx708_camera.urdf" />
-    <xacro:include filename="imx708_camera_gazebo.urdf" />
+    <xacro:include filename="chassis_base.urdf.xacro" />
+    <xacro:include filename="so101_new_calib.urdf.xacro" />
+    <xacro:include filename="nuwa_hp60c.urdf.xacro" />
+    <xacro:include filename="nuwa_hp60c_gazebo.urdf.xacro" />
     <xacro:include filename="ros2_control.urdf" />
+
+    <joint name="${namespace}arm_mount_joint" type="fixed">
+        <origin xyz="-0.047 0 0.0915" rpy="0 0 0"/>
+        <parent link="${namespace}base_link"/>
+        <child link="${namespace}arm_mount_link"/>
+    </joint>
+
+    <link name="${namespace}arm_mount_link">
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.0001 0.0001 0.0001"/>
+            </geometry>
+            <material name="dark"/>
+        </visual>
+    </link>
+
+    <!-- SO101のarm_base_linkは原点が台座底面より2.4mm上にあるため、台座の厚み(9.9mm)に足す。 -->
+    <joint name="${namespace}arm_base_joint" type="fixed">
+        <origin xyz="-0.021 0 0.01" rpy="0 0 0"/>
+        <parent link="${namespace}arm_mount_link"/>
+        <child link="${namespace}arm_base_link"/>
+    </joint>
 </robot>

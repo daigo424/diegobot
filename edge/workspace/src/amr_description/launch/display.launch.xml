@@ -6,7 +6,7 @@
 
     <node pkg="robot_state_publisher" exec="robot_state_publisher">
         <param name="robot_description"
-               value="$(command 'xacro $(var urdf_path)')" />
+               value="$(command 'xacro $(var urdf_path)')" type="str" />
     </node>
 
     <node pkg="joint_state_publisher_gui" exec="joint_state_publisher_gui" />
