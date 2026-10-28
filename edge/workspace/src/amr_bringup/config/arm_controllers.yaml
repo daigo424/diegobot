@@ -1,0 +1,44 @@
+# コントローラ名とアクション名はamr_moveit_config/config/moveit_controllers.yamlと一致させる
+controller_manager:
+  ros__parameters:
+    update_rate: 100  # Hz
+
+    arm_group_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    grip_group_controller:
+      type: position_controllers/GripperActionController
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+arm_group_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan
+      - shoulder_lift
+      - elbow_flex
+      - wrist_flex
+      - wrist_roll
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
+    constraints:
+      # 0だと目標に届かないまま待ち続けるため、軌道終了後この秒数で届いていなければ失敗にする。
+      goal_time: 1.0
+      shoulder_pan: {goal: 0.05}
+      shoulder_lift: {goal: 0.05}
+      elbow_flex: {goal: 0.05}
+      wrist_flex: {goal: 0.05}
+      wrist_roll: {goal: 0.05}
+
+grip_group_controller:
+  ros__parameters:
+    joint: gripper
+    # 既定の0.01radだとサーボの停止誤差で届いていても失敗扱いになる。
+    goal_tolerance: 0.02
+    # 物を掴むと目標の手前で止まるため、止まった時点で成功として返す。
+    allow_stalling: true

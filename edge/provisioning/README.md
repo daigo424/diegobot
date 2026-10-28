@@ -32,7 +32,7 @@ BLE経由のWi-Fiプロビジョニングデーモン（Dockerコンテナの外
 
 ## 起動時のコンテナ自動起動
 
-`diegobot.service` がラズパイ起動時に `make up-boot` を実行し、コンテナ群(diegobot / rosbridge / micro-ros-agent)を立ち上げる。`make up` と違いパッケージインストールは行わない。`.env` の `HOST_MICRO_ROS_PORT` / `HOST_LIDAR_PORT` が未接続ならそのデバイス無しで起動する（`make up` も同様）。`setup.sh` 実行直後ではなく、次回の起動から有効になる。
+`diegobot.service` がラズパイ起動時に `make up-boot` を実行し、コンテナ群(diegobot / rosbridge / micro-ros-agent)を立ち上げる。`make up` と違いパッケージインストールは行わない。`.env` の `HOST_MICRO_ROS_PORT` / `HOST_LIDAR_PORT` / `HOST_ARM_PORT` が未接続ならそのデバイス無しで起動する（`make up` も同様）。`setup.sh` 実行直後ではなく、次回の起動から有効になる。
 
 ## 動作確認
 

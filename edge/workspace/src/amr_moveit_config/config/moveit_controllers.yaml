@@ -23,3 +23,7 @@ moveit_simple_controller_manager:
       - gripper
     action_ns: gripper_cmd
     default: true
+
+trajectory_execution:
+  # Must exceed goal_time in amr_bringup/config/arm_controllers.yaml, or MoveIt cancels a goal the controller is still allowed to reach.
+  allowed_goal_duration_margin: 1.5

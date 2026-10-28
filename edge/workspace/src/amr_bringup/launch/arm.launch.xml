@@ -1,0 +1,24 @@
+<launch>
+    <arg name="arm_usb_port" default="/dev/ttyArm" />
+
+    <let name="robot_description"
+         value="$(command 'xacro $(find-pkg-share amr_description)/urdf/amr.urdf.xacro use_gazebo:=false use_real_arm:=true arm_usb_port:=$(var arm_usb_port)')" />
+
+    <node pkg="robot_state_publisher" exec="robot_state_publisher">
+        <param name="robot_description" value="$(var robot_description)" type="str" />
+    </node>
+
+    <!-- サーボバスが切れるとドライバがabortするため、launchごと終了させてコンテナの再起動に任せる。 -->
+    <node pkg="controller_manager" exec="ros2_control_node" output="screen" on_exit="shutdown">
+        <param from="$(find-pkg-share amr_bringup)/config/arm_controllers.yaml" />
+        <remap from="~/robot_description" to="/robot_description" />
+    </node>
+
+    <node pkg="controller_manager" exec="spawner"
+          args="joint_state_broadcaster arm_group_controller grip_group_controller" />
+
+    <!-- 電源オフ中に垂れた腕はURDFの可動範囲外にあり、MoveItが計画を拒否するため、起動したらstandbyへ戻す。 -->
+    <node pkg="amr_bringup" exec="move_arm_to_standby.py" output="screen">
+        <param from="$(find-pkg-share amr_bringup)/config/arm_standby.yaml" />
+    </node>
+</launch>

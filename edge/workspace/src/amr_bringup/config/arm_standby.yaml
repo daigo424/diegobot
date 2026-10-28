@@ -1,0 +1,7 @@
+# amr_moveit_config/config/amr.srdfのstandbyと同じ値にする(こちらはMoveIt無しのラズパイで起動・終了時に使う)。
+move_arm_to_standby:
+  ros__parameters:
+    joints: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll]
+    positions: [0.0, -1.65, 1.4, 0.8519, -1.5708]
+    max_velocity: 0.5  # rad/s
+    min_duration: 2.0  # s

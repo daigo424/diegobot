@@ -14,6 +14,12 @@
         <xacro:include filename="ros2_control.urdf" />
     </xacro:if>
 
+    <!-- 実機のSO-101をros2_controlで動かす時だけtrueにする(use_gazeboはfalseにすること)。 -->
+    <xacro:arg name="use_real_arm" default="false"/>
+    <xacro:if value="$(arg use_real_arm)">
+        <xacro:include filename="so101_feetech.ros2_control.xacro" />
+    </xacro:if>
+
     <joint name="${namespace}arm_mount_joint" type="fixed">
         <origin xyz="-0.047 0 0.0915" rpy="0 0 0"/>
         <parent link="${namespace}base_link"/>
@@ -28,6 +34,12 @@
             </geometry>
             <material name="dark"/>
         </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <geometry>
+                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.0001 0.0001 0.0001"/>
+            </geometry>
+        </collision>
     </link>
 
     <!-- SO101のarm_base_linkは原点が台座底面より2.4mm上にあるため、台座の厚み(9.9mm)に足す。 -->

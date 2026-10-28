@@ -1,0 +1,27 @@
+services:
+  arm:
+    image: diegobot:latest
+    container_name: diegobot_arm
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID} # サーバーのmove_groupと同じ値でないとアクションが届かない
+    devices:
+      # SO-101のサーボバス(feetech_ros2_driver)。arm.launch.xmlのarm_usb_portの既定値と同じ名前にする。
+      - "${HOST_ARM_PORT}:/dev/ttyArm"
+    # /dev/ttyACM*はホスト側でroot:dialout(0660)になり、コンテナの一般ユーザー(app)からは開けないため。
+    group_add:
+      - dialout
+    volumes:
+      - ../workspace:/workspace
+    restart: unless-stopped
+    # 停止時にarm_bringup.shが腕をstandbyへ動かし終えるまで待つ(既定の10秒では途中でSIGKILLされうる)。
+    stop_grace_period: 30s
+    # amr_bringupはイメージではなくdiegobotコンテナでcolcon buildした/workspace/installにある。
+    # execでarm_bringup.shをPID 1にし、docker stopのSIGTERMを直接受け取らせる。
+    command: >
+      bash -c "source /opt/ros2_controllers_ws/install/setup.bash &&
+      source /workspace/install/setup.bash &&
+      exec $$(ros2 pkg prefix amr_bringup)/lib/amr_bringup/arm_bringup.sh"

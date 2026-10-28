@@ -14,16 +14,18 @@ else
 GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-native.yml
 endif
 # 無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
-# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROSは.envのデバイスパスが
+# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROS/アームは.envのデバイスパスが
 # 存在するかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
 ROBOT_ATTACHED     ?= 1
 _HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./.env 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
 CAMERA_ATTACHED    ?= $(ROBOT_ATTACHED)
 LIDAR_ATTACHED     ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_PORT)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
+ARM_ATTACHED       ?= $(call _HOST_DEVICE_EXISTS,HOST_ARM_PORT)
 CAMERA_COMPOSE_FILE    := $(if $(filter 1,$(CAMERA_ATTACHED)),edge/docker/docker-compose.camera-attached.yml,)
 LIDAR_COMPOSE_FILE     := $(if $(filter 1,$(LIDAR_ATTACHED)),edge/docker/docker-compose.lidar-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
+ARM_COMPOSE_FILE       := $(if $(filter 1,$(ARM_ATTACHED)),edge/docker/docker-compose.arm-attached.yml,)
 
 # カメラのvideoデバイス番号は検出状況によって起動毎に変わりうる(未検出時は/dev/video0/1が
 # 無いこともある)。固定リストで指定するとdocker compose自体が存在しないデバイスで失敗する
@@ -53,7 +55,7 @@ else
 PERCEPTION_COMPOSE_FILE := edge/docker/docker-compose.perception.yml
 endif
 
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
@@ -66,7 +68,7 @@ PKG                ?=
 PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
 # サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
 # (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
-SERVER_PKGS        := amr_perception
+SERVER_PKGS        := amr_perception amr_moveit_config
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
 WS_SRC_PATHS       := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
 # ラズパイ(RAM 2GB)ではPCL/rclcppを含むC++の1ファイルのコンパイルにDebugで約1.5GB、Releaseで約1GB要り、
@@ -244,7 +246,7 @@ pi-push-image: pi-build-image
 	  docker tag $(PI_IMAGE_TAG) diegobot:latest && \
 	  rm -f $(PI_IMAGE_TAR) && \
 	  cd ~/diegobot && \
-	  docker compose -f edge/docker/docker-compose.yml -p diegobot --env-file .env up -d --force-recreate \
+	  make up-boot \
 	'
 	rm -f $(PI_IMAGE_TAR)
 

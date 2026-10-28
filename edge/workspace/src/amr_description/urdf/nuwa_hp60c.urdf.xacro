@@ -25,6 +25,12 @@
       </geometry>
       <material name="3d_printed"/>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/arm_camera_mount.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+    </collision>
   </link>
 
   <joint name="hp60c_joint" type="fixed">
@@ -41,6 +47,12 @@
       </geometry>
       <material name="dark"/>
     </visual>
+    <collision>
+      <origin xyz="-0.0105 -0.0023 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.029 0.090 0.019"/>
+      </geometry>
+    </collision>
   </link>
 
   <!-- ドライバ(ascamera)は画像・点群をこのフレームの子(camera_color_0等)としてTFを出すため、名前を合わせる。

@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:arg name="arm_usb_port" default="/dev/ttyArm"/>
+
+    <!-- offset: 生値の範囲（0〜4095）-->
+    <!-- p_gain: LeRobotが書き込むP=16、出荷時のP=32 -->
+    <xacro:macro name="feetech_joint" params="name id offset p_gain:=32">
+        <joint name="${name}">
+            <param name="id">${id}</param>
+            <param name="offset">${offset}</param>
+            <param name="p_cofficient">${p_gain}</param>
+            <command_interface name="position"/>
+            <state_interface name="position"/>
+            <state_interface name="velocity"/>
+        </joint>
+    </xacro:macro>
+
+    <ros2_control name="SO101FeetechSystem" type="system">
+        <hardware>
+            <plugin>feetech_ros2_driver/FeetechHardwareInterface</plugin>
+            <param name="usb_port">$(arg arm_usb_port)</param>
+        </hardware>
+        <xacro:feetech_joint name="shoulder_pan" id="1" offset="2048"/>
+        <xacro:feetech_joint name="shoulder_lift" id="2" offset="3040"/>
+        <xacro:feetech_joint name="elbow_flex" id="3" offset="2048"/>
+        <xacro:feetech_joint name="wrist_flex" id="4" offset="1068"/>
+        <xacro:feetech_joint name="wrist_roll" id="5" offset="2048"/>
+        <!-- 掴んだまま締め続ける力を抑えるため、グリッパーは低いまま -->
+        <xacro:feetech_joint name="gripper" id="6" offset="2017" p_gain="16"/>
+    </ros2_control>
+</robot>
