@@ -11,6 +11,9 @@
     <xacro:arg name="use_gazebo" default="true"/>
     <xacro:if value="$(arg use_gazebo)">
         <xacro:include filename="nuwa_hp60c_gazebo.urdf.xacro" />
+        <xacro:include filename="t_mini_plus_12_gazebo.urdf.xacro" />
+        <xacro:t_mini_plus_12_gazebo name="${namespace}lidar_front_right"/>
+        <xacro:t_mini_plus_12_gazebo name="${namespace}lidar_rear_left"/>
         <xacro:include filename="ros2_control.urdf" />
     </xacro:if>
 

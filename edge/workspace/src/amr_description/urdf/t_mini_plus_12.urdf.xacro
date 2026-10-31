@@ -1,0 +1,42 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- https://www.ydlidar.com/static/upload/file/20260615/1781510293384466.pdf -->
+  <xacro:macro name="t_mini_plus_12" params="name parent xyz rpy">
+    <joint name="${name}_joint" type="fixed">
+      <origin xyz="${xyz}" rpy="${rpy}"/>
+      <parent link="${parent}"/>
+      <child link="${name}_link"/>
+    </joint>
+
+    <link name="${name}_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh filename="package://amr_description/meshes/lidar.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="red"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.0106" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.0386 0.0386 0.0212"/>
+        </geometry>
+      </collision>
+      <collision>
+        <origin xyz="0 0 0.02755" rpy="0 0 0"/>
+        <geometry>
+          <cylinder length="0.0127" radius="0.0181"/>
+        </geometry>
+      </collision>
+    </link>
+
+    <joint name="${name}_scan_joint" type="fixed">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <parent link="${name}_link"/>
+      <child link="${name}_scan"/>
+    </joint>
+    <link name="${name}_scan"/>
+  </xacro:macro>
+
+</robot>

@@ -54,7 +54,6 @@
     <end_effector name="gripper" parent_link="gripper_frame_link" group="grip_group" parent_group="arm_group"/>
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
     <disable_collisions link1="arm_base_link" link2="base_link" reason="Adjacent"/>
-    <disable_collisions link1="arm_base_link" link2="base_scan" reason="Default"/>
     <disable_collisions link1="arm_base_link" link2="caster_back_left_link" reason="Never"/>
     <disable_collisions link1="arm_base_link" link2="caster_back_right_link" reason="Never"/>
     <disable_collisions link1="arm_base_link" link2="shoulder_link" reason="Adjacent"/>
@@ -63,19 +62,14 @@
     <disable_collisions link1="arm_base_link" link2="wheel_right_link" reason="Never"/>
     <disable_collisions link1="arm_camera_mount_link" link2="gripper_link" reason="Adjacent"/>
     <disable_collisions link1="arm_camera_mount_link" link2="hp60c_link" reason="Adjacent"/>
-    <disable_collisions link1="base_link" link2="base_scan" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="caster_back_left_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="caster_back_right_link" reason="Adjacent"/>
+    <disable_collisions link1="base_link" link2="lidar_front_right_link" reason="Adjacent"/>
+    <disable_collisions link1="base_link" link2="lidar_rear_left_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="shoulder_link" reason="Never"/>
     <disable_collisions link1="base_link" link2="upper_arm_link" reason="Never"/>
     <disable_collisions link1="base_link" link2="wheel_left_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="wheel_right_link" reason="Adjacent"/>
-    <disable_collisions link1="base_scan" link2="caster_back_left_link" reason="Never"/>
-    <disable_collisions link1="base_scan" link2="caster_back_right_link" reason="Never"/>
-    <disable_collisions link1="base_scan" link2="shoulder_link" reason="Default"/>
-    <disable_collisions link1="base_scan" link2="upper_arm_link" reason="Never"/>
-    <disable_collisions link1="base_scan" link2="wheel_left_link" reason="Never"/>
-    <disable_collisions link1="base_scan" link2="wheel_right_link" reason="Never"/>
     <disable_collisions link1="caster_back_left_link" link2="caster_back_right_link" reason="Never"/>
     <disable_collisions link1="caster_back_left_link" link2="gripper_link" reason="Never"/>
     <disable_collisions link1="caster_back_left_link" link2="lower_arm_link" reason="Never"/>

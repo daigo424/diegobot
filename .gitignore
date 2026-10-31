@@ -66,5 +66,6 @@ testing/eval-reports/
 !edge/esp32/.vscode/
 !edge/pico/.vscode/
 
-# Third-party mesh with no redistribution terms (see amr_description/meshes/README.md for how to get it)
+# Third-party meshes with no redistribution terms (see amr_description/meshes/README.md for how to get them)
 edge/workspace/src/amr_description/meshes/camera_NUWA_HP60C.stl
+edge/workspace/src/amr_description/meshes/lidar.stl
