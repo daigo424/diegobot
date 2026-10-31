@@ -25,9 +25,9 @@ const int PWM_RANGE    = 255;
 const float WHEEL_BASE_M  = 0.295f;  // トレッド幅（左右輪の接地点の中心間距離: 29.5cm）
 const float MAX_SPEED_MPS = 0.5f;   // 最大想定速度 (m/s)
 
-// micro-ROSシリアルのボーレート。/odom(約750B)等の送信量が115200baud(約11.5KB/s)を超え、
-// 書き込み待ちでループが止まって/cmd_velの受信が遅れるため、agent側(-b)と揃えて上げる。
-const unsigned long MICRO_ROS_BAUD = 921600;
+// micro-ROSシリアルのボーレート。agent側(-b)と揃える。115200では/odom等の送信量に足りず、
+// 921600ではラズパイ5がCH340の受信を取りこぼしてreliableストリームが詰まる。
+const unsigned long MICRO_ROS_BAUD = 460800;
 
 // /cmd_velがこの時間途切れたらモーターを止める(最後の停止指令が落ちても回り続けないため)。
 const int64_t CMD_VEL_TIMEOUT_MS = 500;

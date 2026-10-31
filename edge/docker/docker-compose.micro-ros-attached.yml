@@ -14,6 +14,7 @@ services:
     restart: unless-stopped
     # entrypoint(/ros_entrypoint.sh)がsourceするのは/opt/ros/${ROS_DISTRO}/setup.bashのみで、
     # micro_ros_agentはソースビルドのオーバーレイ(/opt/micro_ros_agent_ws)にしか無いため明示sourceが必要。
+    # -bはESP32ファームのMICRO_ROS_BAUDと揃える。
     command: >
       bash -c "source /opt/micro_ros_agent_ws/install/setup.bash &&
-      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 921600"
+      ros2 run micro_ros_agent micro_ros_agent serial --dev $$MICRO_ROS_PORT -b 460800"
