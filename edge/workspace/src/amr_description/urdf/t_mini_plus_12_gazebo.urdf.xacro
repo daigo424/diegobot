@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <!-- 実機の既定の6Hzでは測距4000Hzから1周約666点(0.54°刻み)、測距範囲は0.05〜12m -->
+  <!-- 実機はドライバ設定(amr_bringup/config/t_mini_plus.yaml)の10Hzで回すため、測距4000Hzから1周400点、測距範囲は0.05〜12m -->
   <xacro:macro name="t_mini_plus_12_gazebo" params="name">
     <gazebo reference="${name}_scan">
       <sensor name="${name}" type="gpu_lidar">
@@ -10,7 +10,7 @@
         <lidar>
           <scan>
             <horizontal>
-              <samples>666</samples>
+              <samples>400</samples>
               <min_angle>${-pi}</min_angle>
               <max_angle>${pi}</max_angle>
             </horizontal>
@@ -21,7 +21,7 @@
           </range>
         </lidar>
         <always_on>1</always_on>
-        <update_rate>6</update_rate>
+        <update_rate>10</update_rate>
         <visualize>true</visualize>
         <topic>${name}/scan</topic>
       </sensor>

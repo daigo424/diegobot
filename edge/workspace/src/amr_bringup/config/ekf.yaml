@@ -1,7 +1,7 @@
 ekf_filter_node:
   ros__parameters:
     frequency: 30.0
-    sensor_timeout: 0.1
+    sensor_timeout: 0.2  # ESP32の/odom・/imuは約14Hz(約70ms間隔)のため、0.1だと少しの遅れで途切れ扱いになる
     two_d_mode: true
     print_diagnostics: true
     debug: false

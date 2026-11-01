@@ -1,13 +1,5 @@
 <launch>
-    <arg name="arm_usb_port" default="/dev/ttyArm" />
-
-    <let name="robot_description"
-         value="$(command 'xacro $(find-pkg-share amr_description)/urdf/amr.urdf.xacro use_gazebo:=false use_real_arm:=true arm_usb_port:=$(var arm_usb_port)')" />
-
-    <node pkg="robot_state_publisher" exec="robot_state_publisher">
-        <param name="robot_description" value="$(var robot_description)" type="str" />
-    </node>
-
+    <!-- /robot_descriptionはbase.launch.xmlのrobot_state_publisherから受け取る(それまでは待ち続ける)。 -->
     <!-- サーボバスが切れるとドライバがabortするため、launchごと終了させてコンテナの再起動に任せる。 -->
     <node pkg="controller_manager" exec="ros2_control_node" output="screen" on_exit="shutdown">
         <param from="$(find-pkg-share amr_bringup)/config/arm_controllers.yaml" />

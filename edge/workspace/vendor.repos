@@ -4,15 +4,9 @@
 # 取得コマンド: make vendor-import (= vcs import src < vendor.repos)
 # 参考: https://ros2-quality-assurance.readthedocs.io/en/released/tutorials/dependencies.html
 repositories:
-  vendor/Slamtec/sllidar_ros2:
+  vendor/YDLIDAR/ydlidar_ros2_driver:
     type: git
-    url: https://github.com/Slamtec/sllidar_ros2.git
-    # upstreamにgit tagが無いため、versionはコミットIDで固定する
-    # (mainのままだと取得タイミングでコードが変わり再現性が無くなる)。
-    version: 34300099fadfc772965962dec837bf436706188f
-  vendor/christianrauch/camera_ros:
-    type: git
-    url: https://github.com/christianrauch/camera_ros.git
-    # edge/docker/DockerfileでビルドするRaspberry Pi財団版libcamera(v0.7.2+rpt20260817)に
-    # 対応するバージョンとして0.7.0を使用。
-    version: 0.7.0
+    url: https://github.com/YDLIDAR/ydlidar_ros2_driver.git
+    # 既定ブランチ(master)は型指定なしのdeclare_parameterを使っておりJazzyでビルドできないため、
+    # humbleブランチの動作確認済みコミットに固定する(upstreamにgit tagは無い)。
+    version: 4ef70d3f32a85704ade0be54b214f3763b1ab3e8

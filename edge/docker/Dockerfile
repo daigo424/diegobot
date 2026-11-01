@@ -31,14 +31,6 @@ RUN apt-get update && apt-get install -y \
       git \
       bear \
       vim \
-      meson \
-      ninja-build \
-      libyaml-dev \
-      python3-yaml \
-      python3-ply \
-      python3-jinja2 \
-      libudev-dev \
-      openssl \
     && rm -rf /var/lib/apt/lists/*
 
 
@@ -81,20 +73,12 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     cd /opt/micro_ros_agent_ws && \
     colcon build --merge-install
 
-# apt版libcamera(ros-${ROS_DISTRO}-libcamera、camera_rosが依存)は、imx708のAfWindows制御を
-# IPAプロキシへシリアライズする際にクラッシュする(FATAL: A list of V4L2 controls requires
-# a ControlInfoMap)。ホストのrpicam-appsで動いているRaspberry Pi財団パッチ版libcameraを
-# ソースビルドし、/usr/localにインストールする(apt版と共存させると意図せずapt版がリンク
-# されるため、camera_rosをビルドするedge/workspace/vendor.repos側ではlibcamera/camera-ros
-# のapt版を一切インストールしないこと)。
-RUN git clone --branch v0.7.2+rpt20260817 --depth 1 \
-      https://github.com/raspberrypi/libcamera.git \
-      /opt/libcamera
-
-RUN cd /opt/libcamera && \
-    meson setup build --prefix=/usr/local --buildtype=release \
-      -Dgstreamer=disabled -Dpycamera=disabled -Dqcam=disabled -Dcam=disabled -Ddocumentation=disabled && \
-    ninja -C build install && \
+# vendor/YDLIDAR/ydlidar_ros2_driver(T-mini Plus)がfind_packageするSDK。ROSパッケージではなくrosdep/aptでも
+# 提供されていないため、タグに固定してソースビルドし/usr/localに入れる。
+RUN git clone --branch V1.2.7 --depth 1 https://github.com/YDLIDAR/YDLidar-SDK.git /opt/YDLidar-SDK && \
+    cmake -S /opt/YDLidar-SDK -B /opt/YDLidar-SDK/build -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build /opt/YDLidar-SDK/build -j"$(nproc)" && \
+    cmake --install /opt/YDLidar-SDK/build && \
     ldconfig
 
 # bash -c "... && bash"のような入れ子bash越しだとcomplete登録(colcon-argcomplete)が
@@ -115,7 +99,7 @@ EOF
 COPY --from=workspace-package-xml /out /tmp/workspace_src
 RUN apt-get update && \
     . /opt/ros/${ROS_DISTRO}/setup.sh && \
-    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys="libcamera roscpp rospy catkin" && \
+    rosdep install --from-paths /tmp/workspace_src --ignore-src -r -y --skip-keys="roscpp rospy catkin" && \
     rm -rf /var/lib/apt/lists/*
 
 ENV TURTLEBOT3_MODEL=waffle

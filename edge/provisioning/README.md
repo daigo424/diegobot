@@ -32,7 +32,17 @@ BLE経由のWi-Fiプロビジョニングデーモン（Dockerコンテナの外
 
 ## 起動時のコンテナ自動起動
 
-`diegobot.service` がラズパイ起動時に `make up-boot` を実行し、コンテナ群(diegobot / rosbridge / micro-ros-agent)を立ち上げる。`make up` と違いパッケージインストールは行わない。`.env` の `HOST_MICRO_ROS_PORT` / `HOST_LIDAR_PORT` / `HOST_ARM_PORT` が未接続ならそのデバイス無しで起動する（`make up` も同様）。`setup.sh` 実行直後ではなく、次回の起動から有効になる。
+`diegobot.service` がラズパイ起動時に `make up-boot` を実行し、コンテナ群を立ち上げる。`make up` と違いパッケージインストールは行わない。diegobot / rosbridge は常に起動し、接続されているデバイスに応じて次も起動する（`make up` も同様）。
+
+| コンテナ | 起動条件 | 中身 |
+|---|---|---|
+| micro-ros-agent | `.env` の `HOST_MICRO_ROS_PORT` が存在する | ESP32とのmicro-ROS Agent |
+| lidar_front_right / lidar_rear_left | `.env` の `HOST_LIDAR_FRONT_RIGHT_PORT` / `HOST_LIDAR_REAR_LEFT_PORT` が存在する | YDLIDAR T-mini Plus(`lidar.launch.xml`) |
+| arm | `.env` の `HOST_ARM_PORT` が存在する | SO-101(`arm.launch.xml`) |
+| hp60c | HP60C(USB `3482:6723`)が接続されている | 深度カメラ(`nuwa_hp60c.launch.py`) |
+| base | 上のデバイスのどれか1つでも接続されている | robot_state_publisherとEKF(`base.launch.xml`) |
+
+Raspberry Pi 5では、HP60Cの同梱SDK(`libasusb.so`)が4KBページ前提のため、`/boot/firmware/config.txt` に `kernel=kernel8.img` を書いて4KBページのカーネルで起動する(標準の16KBページのカーネルでは読み込めない)。`setup.sh` 実行直後ではなく、次回の起動から有効になる。
 
 ## 動作確認
 

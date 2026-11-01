@@ -1,0 +1,26 @@
+services:
+  lidar_rear_left:
+    image: diegobot:latest
+    container_name: diegobot_lidar_rear_left
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+    devices:
+      # YDLIDAR T-mini Plus。lidar.launch.xmlのportの既定値と同じ名前にする。
+      # by-pathのパスは:を含み短い書式(ホスト:コンテナ)では区切りを誤解釈されるため、長い書式で書く。
+      - source: ${HOST_LIDAR_REAR_LEFT_PORT}
+        target: /dev/ttyLidar
+        permissions: rwm
+    # /dev/ttyUSB*はホスト側でroot:dialout(0660)になり、コンテナの一般ユーザー(app)からは開けないため。
+    group_add:
+      - dialout
+    volumes:
+      - ../workspace:/workspace
+    restart: unless-stopped
+    # ydlidar_ros2_driverはvendor.reposで取得し、diegobotコンテナでcolcon buildした/workspace/installにある。
+    command: >
+      bash -c "source /workspace/install/setup.bash &&
+      exec ros2 launch amr_bringup lidar.launch.xml name:=lidar_rear_left"

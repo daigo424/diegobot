@@ -1,0 +1,11 @@
+<launch>
+    <!-- URDFのLiDAR名(lidar_front_right等)。/<name>/scanを<name>_scanフレームで出す。 -->
+    <arg name="name" />
+    <arg name="port" default="/dev/ttyLidar" />
+
+    <node pkg="ydlidar_ros2_driver" exec="ydlidar_ros2_driver_node" namespace="$(var name)" output="screen" respawn="true" respawn_delay="2.0">
+        <param from="$(find-pkg-share amr_bringup)/config/t_mini_plus.yaml" />
+        <param name="port" value="$(var port)" />
+        <param name="frame_id" value="$(var name)_scan" />
+    </node>
+</launch>

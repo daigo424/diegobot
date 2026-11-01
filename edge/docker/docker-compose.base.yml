@@ -1,0 +1,18 @@
+services:
+  # robot_state_publisher(TF・/robot_description)とEKF。アーム・LiDAR・カメラ・ESP32のどれもがTFを要るため、どれか1つでも繋がっていれば起動する。
+  base:
+    image: diegobot:latest
+    container_name: diegobot_base
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+    volumes:
+      - ../workspace:/workspace
+    restart: unless-stopped
+    # amr_bringupはイメージではなくdiegobotコンテナでcolcon buildした/workspace/installにある。
+    command: >
+      bash -c "source /workspace/install/setup.bash &&
+      exec ros2 launch amr_bringup base.launch.xml"

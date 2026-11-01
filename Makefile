@@ -18,35 +18,18 @@ endif
 # 存在するかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
 ROBOT_ATTACHED     ?= 1
 _HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./.env 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
-CAMERA_ATTACHED    ?= $(ROBOT_ATTACHED)
-LIDAR_ATTACHED     ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_PORT)
+LIDAR_FRONT_RIGHT_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_FRONT_RIGHT_PORT)
+LIDAR_REAR_LEFT_ATTACHED   ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_REAR_LEFT_PORT)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
 ARM_ATTACHED       ?= $(call _HOST_DEVICE_EXISTS,HOST_ARM_PORT)
-CAMERA_COMPOSE_FILE    := $(if $(filter 1,$(CAMERA_ATTACHED)),edge/docker/docker-compose.camera-attached.yml,)
-LIDAR_COMPOSE_FILE     := $(if $(filter 1,$(LIDAR_ATTACHED)),edge/docker/docker-compose.lidar-attached.yml,)
+# HP60Cは機体ごとに変わるパスが無いため、USBのベンダー/プロダクトIDで判定する。
+HP60C_ATTACHED     ?= $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell lsusb -d 3482:6723 >/dev/null 2>&1 && echo 1 || echo 0),0)
+LIDAR_FRONT_RIGHT_COMPOSE_FILE := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED)),edge/docker/docker-compose.lidar-front-right-attached.yml,)
+LIDAR_REAR_LEFT_COMPOSE_FILE   := $(if $(filter 1,$(LIDAR_REAR_LEFT_ATTACHED)),edge/docker/docker-compose.lidar-rear-left-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
 ARM_COMPOSE_FILE       := $(if $(filter 1,$(ARM_ATTACHED)),edge/docker/docker-compose.arm-attached.yml,)
-
-# カメラのvideoデバイス番号は検出状況によって起動毎に変わりうる(未検出時は/dev/video0/1が
-# 無いこともある)。固定リストで指定するとdocker compose自体が存在しないデバイスで失敗する
-# ため、Makefile読み込み時に実際に存在するものだけを動的に書き出す。
-CAMERA_DEVICES_GENERATED := edge/docker/docker-compose.camera-devices.generated.yml
-ifeq ($(CAMERA_ATTACHED),1)
-_MK_GEN_CAMERA_DEVICES := $(shell { \
-	echo "services:"; \
-	echo "  diegobot:"; \
-	echo "    devices:"; \
-	for n in 0 1 10 11 12 13 14 15 16 18 19 20 21 22 23 31; do \
-	  [ -e "/dev/video$$n" ] && echo "      - \"/dev/video$$n:/dev/video$$n\""; \
-	done; \
-	for f in /dev/media0 /dev/media1 /dev/media2 /dev/media3 /dev/media4 /dev/dma_heap/system /dev/dma_heap/linux,cma /dev/v4l-subdev0 /dev/v4l-subdev1; do \
-	  [ -e "$$f" ] && echo "      - \"$$f:$$f\""; \
-	done; \
-} > $(CAMERA_DEVICES_GENERATED))
-CAMERA_DEVICES_COMPOSE_FILE := $(CAMERA_DEVICES_GENERATED)
-else
-CAMERA_DEVICES_COMPOSE_FILE :=
-endif
+HP60C_COMPOSE_FILE     := $(if $(filter 1,$(HP60C_ATTACHED)),edge/docker/docker-compose.hp60c-attached.yml,)
+BASE_COMPOSE_FILE      := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED) $(LIDAR_REAR_LEFT_ATTACHED) $(MICRO_ROS_ATTACHED) $(ARM_ATTACHED) $(HP60C_ATTACHED)),edge/docker/docker-compose.base.yml,)
 
 # 物体検出等のサーバー側処理用コンテナ(NVIDIA GPU前提)。ラズパイでは動かさない。
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
@@ -55,7 +38,7 @@ else
 PERCEPTION_COMPOSE_FILE := edge/docker/docker-compose.perception.yml
 endif
 
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(CAMERA_COMPOSE_FILE),-f $(CAMERA_COMPOSE_FILE)) $(if $(CAMERA_DEVICES_COMPOSE_FILE),-f $(CAMERA_DEVICES_COMPOSE_FILE)) $(if $(LIDAR_COMPOSE_FILE),-f $(LIDAR_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(LIDAR_FRONT_RIGHT_COMPOSE_FILE),-f $(LIDAR_FRONT_RIGHT_COMPOSE_FILE)) $(if $(LIDAR_REAR_LEFT_COMPOSE_FILE),-f $(LIDAR_REAR_LEFT_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) $(if $(HP60C_COMPOSE_FILE),-f $(HP60C_COMPOSE_FILE)) $(if $(BASE_COMPOSE_FILE),-f $(BASE_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
@@ -122,6 +105,10 @@ MODEL ?=
 perception:
 	$(EXEC) perception bash -c "source $(ROS_INSTALL_PREFIX)/setup.bash && source $(ROS2_WS)/install/local_setup.bash && ros2 launch amr_perception perception.launch.py $(if $(MODEL),model:=$(MODEL))"
 
+# 実機のロボットモデル・TF・センサーを開発機のRVizで見る。
+view-robot:
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_bringup view_robot.launch.xml"
+
 # ros2 launchで起動したプロセスをCtrl+Cせず再起動すると、gz sim(rubyラッパー)や
 # ros_gz_bridge系ノードが孤児化して残り続けることがある(SIGINTがlaunchの子孫全員に
 # 伝播しないケース)。それらをまとめてSIGKILLで掃除する。
@@ -157,10 +144,10 @@ colcon-build-clean:
 colcon-build-clean-warn:
 	$(MAKE) colcon-build CLEAN=1 WARN=1
 
-# libcameraはedge/docker/Dockerfileでソースビルド済み(apt版と共存不可)のため、
-# rosdepがapt版を入れないよう--skip-keysで除外する。
+# roscpp/rospy/catkinはvendor/angstrong/ascamera(HP60Cドライバ)のpackage.xmlに残るROS 1の宣言で、
+# Jazzyでは解決できずrosdepが失敗するため除外する。
 install-packages:
-	$(MAKE) colcon CMD_RUN="sudo -E apt-get update && sudo -E rosdep install --from-paths $(WS_SRC_PATHS) --ignore-src -r -y --skip-keys='libcamera roscpp rospy catkin'"
+	$(MAKE) colcon CMD_RUN="sudo -E apt-get update && sudo -E rosdep install --from-paths $(WS_SRC_PATHS) --ignore-src -r -y --skip-keys='roscpp rospy catkin'"
 
 # 詳細はedge/workspace/vendor.repos参照。
 vendor-import:

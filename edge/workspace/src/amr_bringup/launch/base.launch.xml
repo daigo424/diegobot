@@ -1,0 +1,13 @@
+<launch>
+    <arg name="arm_usb_port" default="/dev/ttyArm" />
+
+    <!-- arm.launch.xmlのros2_control_nodeもこの/robot_descriptionを使うため、実機アーム用の定義を含めておく。 -->
+    <let name="robot_description"
+         value="$(command 'xacro $(find-pkg-share amr_description)/urdf/amr.urdf.xacro use_gazebo:=false use_real_arm:=true arm_usb_port:=$(var arm_usb_port)')" />
+
+    <node pkg="robot_state_publisher" exec="robot_state_publisher">
+        <param name="robot_description" value="$(var robot_description)" type="str" />
+    </node>
+
+    <include file="$(find-pkg-share amr_bringup)/launch/ekf.launch.xml" />
+</launch>

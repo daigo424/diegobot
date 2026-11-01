@@ -56,8 +56,8 @@ graph LR
 
 ## 4. Raspberry Pi 4B ⟷ カメラ
 
-- カメラモジュール: innomaker CAM-IMX708AF（センサー: IMX708、RGBのみ・深度センサー非搭載）
-- 接続: CSIリボンケーブル(15pin-15pin、モジュール同梱品)でラズパイのCAM0ポートへ接続
+- カメラ: Yahboom Nuwa-HP60C（RGB-D、USB `3482:6723`）。アームのグリッパーにマウントで取り付ける
+- 接続: USBケーブルでラズパイのUSBポートへ接続（給電もUSBバスパワー）
 
 ## 5. ESP32 ピン割当
 

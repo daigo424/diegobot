@@ -1,0 +1,5 @@
+<launch>
+    <!-- 実機のTFと/robot_descriptionはラズパイのbase.launch.xmlが出すため、ここではrobot_state_publisherを起動しない(二重になる)。 -->
+    <node pkg="rviz2" exec="rviz2" output="screen"
+          args="-d $(find-pkg-share amr_bringup)/rviz/robot.rviz" />
+</launch>

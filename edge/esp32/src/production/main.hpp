@@ -112,8 +112,7 @@ State state;
   if (uxr_millis() - init > MS) { X; init = uxr_millis(); } \
 } while (0)
 
-// create_entities()でのrmw_uros_sync_session()によるagentとのエポック時刻同期後の値を
-// header.stampに詰める。
+// rmw_uros_sync_session()によるagentとのエポック時刻同期後の値をheader.stampに詰める。
 void stamp_header(std_msgs__msg__Header &header) {
   int64_t epoch_ns = rmw_uros_epoch_nanos();
   header.stamp.sec = epoch_ns / 1000000000LL;
@@ -431,6 +430,8 @@ void _loop() {
         }
         EXECUTE_EVERY_N_MS(50, publish_imu();); // 20Hz
         EXECUTE_EVERY_N_MS(33, publish_odom();); // 30Hz
+        // ラズパイはRTCが無く起動後にNTPで時計が飛ぶため、接続時の1回だけの同期ではheader.stampがずれたままになる。
+        EXECUTE_EVERY_N_MS(10000, (void) rmw_uros_sync_session(100););
       }
       break;
 

@@ -1,0 +1,23 @@
+services:
+  hp60c:
+    image: diegobot:latest
+    container_name: diegobot_hp60c
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+    # HP60C(深度カメラ)はV4L2ではなくlibusbで直接USBデバイスを開くため、/dev/bus/usbを渡す。
+    # devices:で渡すとコンテナ作成時点のデバイスしか許可されず抜き差しで見えなくなるため、
+    # ディレクトリをマウントしてUSBのデバイス番号(メジャー189)ごと許可する。
+    volumes:
+      - ../workspace:/workspace
+      - /dev/bus/usb:/dev/bus/usb
+    device_cgroup_rules:
+      - 'c 189:* rmw'
+    restart: unless-stopped
+    # ascamera(vendor/angstrong)はイメージではなくdiegobotコンテナでcolcon buildした/workspace/installにある。
+    command: >
+      bash -c "source /workspace/install/setup.bash &&
+      exec ros2 launch amr_bringup nuwa_hp60c.launch.py"
