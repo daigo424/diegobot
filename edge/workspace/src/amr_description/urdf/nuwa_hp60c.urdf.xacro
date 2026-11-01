@@ -9,7 +9,7 @@
 
   <!-- カメラの取付位置と姿勢 -->
   <xacro:property name="camera_xyz" value="-0.005 -0.008 0.002"/>
-  <xacro:property name="camera_rpy" value="${pi/2} ${pi/180} ${pi/180*90}"/>
+  <xacro:property name="camera_rpy" value="${pi/2} 0 ${pi/180*90}"/>
 
   <joint name="${namespace}arm_camera_mount_joint" type="fixed">
     <origin xyz="${camera_mount_xyz}" rpy="${camera_mount_rpy}"/>
