@@ -1,0 +1,16 @@
+<launch>
+    <!-- 統合は2本を合わせた点を極座標の格子に詰め直すため、車体の点が残っていると同じ方向の奥の障害物を隠す。統合前に各LiDARで消す。 -->
+    <!-- scanを購読しscan_filteredへ出す。 -->
+    <node pkg="laser_filters" exec="scan_to_scan_filter_chain" namespace="lidar_front_right">
+        <param from="$(find-pkg-share amr_bringup)/config/scan_self_filter.yaml" />
+    </node>
+    <node pkg="laser_filters" exec="scan_to_scan_filter_chain" namespace="lidar_rear_left">
+        <param from="$(find-pkg-share amr_bringup)/config/scan_self_filter.yaml" />
+    </node>
+
+    <node_container pkg="rclcpp_components" exec="component_container" name="scan_merger_container" namespace="">
+        <composable_node pkg="scan_2d_merger" plugin="util::LaserScanMerger" name="scan_merger">
+            <param from="$(find-pkg-share amr_bringup)/config/scan_merger.yaml" />
+        </composable_node>
+    </node_container>
+</launch>

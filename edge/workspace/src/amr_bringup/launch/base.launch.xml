@@ -10,4 +10,5 @@
     </node>
 
     <include file="$(find-pkg-share amr_bringup)/launch/ekf.launch.xml" />
+    <include file="$(find-pkg-share amr_bringup)/launch/scan_merger.launch.xml" />
 </launch>

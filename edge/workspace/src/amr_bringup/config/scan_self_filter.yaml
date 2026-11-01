@@ -1,0 +1,14 @@
+# 車体上の柱・アーム台座などを障害物として拾わないよう、車体の平面範囲(chassis_baseの衝突箱+1cm)の点を消す。
+/**:
+  ros__parameters:
+    filter1:
+      name: chassis_box
+      type: laser_filters/LaserScanBoxFilter
+      params:
+        box_frame: base_link
+        min_x: -0.207
+        max_x: 0.079
+        min_y: -0.143
+        max_y: 0.143
+        min_z: -0.5
+        max_z: 0.5
