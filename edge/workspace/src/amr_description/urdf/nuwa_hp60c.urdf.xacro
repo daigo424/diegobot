@@ -5,7 +5,8 @@
 
   <!-- カメラマウントの取付位置と姿勢 -->
   <xacro:property name="camera_mount_xyz" value="-0.001 0.045 -0.044"/>
-  <xacro:property name="camera_mount_rpy" value="${-pi/180*90} 0 ${pi/2}"/>
+  <!-- 姿勢は、実機の深度で見た床がTF上の床と重なるよう補正した値 -->
+  <xacro:property name="camera_mount_rpy" value="${radians(-86.81)} ${radians(-3.51)} ${radians(91.03)}"/>
 
   <!-- カメラの取付位置と姿勢 -->
   <xacro:property name="camera_xyz" value="-0.005 -0.008 0.002"/>

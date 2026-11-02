@@ -24,7 +24,7 @@
     </xacro:if>
 
     <joint name="${namespace}arm_mount_joint" type="fixed">
-        <origin xyz="-0.047 0 0.0915" rpy="0 0 0"/>
+        <origin xyz="-0.047 0 ${chassis_top_z}" rpy="0 0 0"/>
         <parent link="${namespace}base_link"/>
         <child link="${namespace}arm_mount_link"/>
     </joint>

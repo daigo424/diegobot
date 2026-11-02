@@ -9,7 +9,7 @@ Files not listed below are original to this repository and licensed under the MI
 |---|---|---|---|
 | `arm/*` | [TheRobotStudio/SO-ARM100](https://github.com/TheRobotStudio/SO-ARM100) (SO-101) | Apache-2.0 | None |
 | `arm_camera_mount.stl` | [TheRobotStudio/SO-ARM100](https://github.com/TheRobotStudio/SO-ARM100) (SO-101) | Apache-2.0 | Modified from an SO-101 part |
-| `chassis_base.stl` | [ROBOTIS-GIT/turtlebot3](https://github.com/ROBOTIS-GIT/turtlebot3) (TurtleBot3 Waffle) | Apache-2.0 | Some parts removed, renamed |
+| `chassis_base.stl` | [ROBOTIS-GIT/turtlebot3](https://github.com/ROBOTIS-GIT/turtlebot3) (TurtleBot3 Waffle) | Apache-2.0 | Some parts removed, plate spacing and thickness adjusted to the real robot, renamed |
 | `left_tire.stl`, `right_tire.stl` | [ROBOTIS-GIT/turtlebot3](https://github.com/ROBOTIS-GIT/turtlebot3) (TurtleBot3 Waffle) | Apache-2.0 | Renamed |
 
 The URDF files that use these meshes are derived from the same projects:

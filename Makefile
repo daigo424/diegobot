@@ -52,9 +52,10 @@ PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
 # サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
 # (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
 SERVER_PKGS        := amr_perception amr_moveit_config
+PI_WS_SRC_PATHS    := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
-WS_SRC_PATHS       := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
-# ラズパイ(RAM 2GB)ではPCL/rclcppを含むC++の1ファイルのコンパイルにDebugで約1.5GB、Releaseで約1GB要り、
+WS_SRC_PATHS       := $(PI_WS_SRC_PATHS)
+# ラズパイではPCL/rclcppを含むC++の1ファイルのコンパイルにDebugで約1.5GB、Releaseで約1GB要り、
 # 並列に走らせたりDebugにするとスワップで固まる。パッケージは1つずつ、コンパイラはBUILD_JOBS個まで、Releaseでビルドする。
 BUILD_JOBS         ?= 1
 COLCON_BUILD_TYPE  := Release
@@ -186,6 +187,7 @@ pi-rsync:
 	  --exclude=edge/workspace/build/ \
 	  --exclude=edge/workspace/install/ \
 	  --exclude=edge/workspace/log/ \
+	  --exclude=edge/workspace/build-arm64/ \
 	  --exclude=edge/workspace/core \
 	  --exclude=edge/workspace/core.* \
 	  --include=edge/workspace/src/vendor/ \
@@ -236,6 +238,21 @@ pi-push-image: pi-build-image
 	  make up-boot \
 	'
 	rm -f $(PI_IMAGE_TAR)
+
+# ラズパイでC++パッケージをビルドするとメモリ不足で止まるため、開発機でarm64イメージを使って
+# ビルドし、PKGのinstallだけをラズパイの同じ場所へ送る。PI_IMAGE_TAGはラズパイのイメージと同じ版であること。
+# --symlink-installを付けない(リンク先のbuild/がラズパイに無いため)。送った後は、ラズパイ側でコンテナを再起動する。
+PI_CROSS_DIR := edge/workspace/build-arm64
+pi-cross-build: ensure-arm64-emulation
+	@test -n "$(PKG_NAME)" || { echo "PKG=<パッケージ名> を指定してください"; exit 1; }
+	mkdir -p $(PI_CROSS_DIR)/build $(PI_CROSS_DIR)/install $(PI_CROSS_DIR)/log
+	docker run --rm --platform linux/arm64 --user $$(id -u):$$(id -g) -e HOME=/tmp \
+	  -v $(CURDIR)/edge/workspace/src:$(ROS2_WS)/src:ro \
+	  -v $(CURDIR)/$(PI_CROSS_DIR)/build:$(ROS2_WS)/build \
+	  -v $(CURDIR)/$(PI_CROSS_DIR)/install:$(ROS2_WS)/install \
+	  -v $(CURDIR)/$(PI_CROSS_DIR)/log:$(ROS2_WS)/log \
+	  -w $(ROS2_WS) $(PI_IMAGE_TAG) bash -c "$(CMD_ROS2_SOURCE) && colcon build --event-handlers status- --base-paths $(PI_WS_SRC_PATHS) --cmake-args -DCMAKE_BUILD_TYPE=Release --no-warn-unused-cli --packages-up-to $(PKG_NAME)"
+	rsync -az --delete -e "ssh $(PI_SSH_OPTS)" $(PI_CROSS_DIR)/install/$(PKG_NAME)/ $(PI_USER)@$(PI_HOST):~/diegobot/edge/workspace/install/$(PKG_NAME)/
 
 # flutterはsnap経由でインストールされ/snap/binに入るが、呼び出し元シェルのPATHに
 # /snap/binが無いと"flutter: not found"になるため、ここで明示的に足す。

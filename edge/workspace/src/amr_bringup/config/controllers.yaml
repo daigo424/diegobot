@@ -17,7 +17,7 @@ diff_drive_controller:
     right_wheel_names: ["wheel_right_joint"]
 
     wheel_separation: 0.295
-    wheel_radius: 0.033
+    wheel_radius: 0.034
 
     publish_rate: 50.0
     odom_frame_id: odom

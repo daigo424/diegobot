@@ -20,9 +20,9 @@
             <plugin>feetech_ros2_driver/FeetechHardwareInterface</plugin>
             <param name="usb_port">$(arg arm_usb_port)</param>
         </hardware>
-        <xacro:feetech_joint name="shoulder_pan" id="1" offset="2048"/>
+        <xacro:feetech_joint name="shoulder_pan" id="1" offset="1978"/>
         <xacro:feetech_joint name="shoulder_lift" id="2" offset="3040"/>
-        <xacro:feetech_joint name="elbow_flex" id="3" offset="2048"/>
+        <xacro:feetech_joint name="elbow_flex" id="3" offset="1979"/>
         <xacro:feetech_joint name="wrist_flex" id="4" offset="1068"/>
         <xacro:feetech_joint name="wrist_roll" id="5" offset="2048"/>
         <!-- 掴んだまま締め続ける力を抑えるため、グリッパーは低いまま -->

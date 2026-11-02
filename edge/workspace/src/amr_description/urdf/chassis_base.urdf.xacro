@@ -2,13 +2,19 @@
 <robot name="chassis_base" xmlns:xacro="http://ros.org/wiki/xacro">
   <xacro:arg name="namespace" default=""/>
   <xacro:property name="namespace" value="$(arg namespace)"/>
+  <!-- base_linkから天板上面までの高さ(実測)。LiDARとアーム台座はこの面に載る。 -->
+  <xacro:property name="chassis_top_z" value="0.1266"/>
+  <!-- 実測。base_linkは下段の板の下面(床から9.45mm)、車軸は床から車輪半径の高さ。 -->
+  <xacro:property name="base_link_z" value="0.00945"/>
+  <xacro:property name="wheel_radius" value="0.034"/>
+  <xacro:property name="wheel_width" value="0.026"/>
 
   <link name="base_footprint"/>
 
   <joint name="base_joint" type="fixed">
     <parent link="base_footprint"/>
     <child link="base_link" />
-    <origin xyz="0 0 0.010" rpy="0 0 0"/>
+    <origin xyz="0 0 ${base_link_z}" rpy="0 0 0"/>
   </joint>
 
   <link name="base_link">
@@ -21,9 +27,9 @@
     </visual>
 
     <collision>
-      <origin xyz="-0.064 0 0.04575" rpy="0 0 0"/>
+      <origin xyz="-0.064 0 ${chassis_top_z / 2}" rpy="0 0 0"/>
       <geometry>
-        <box size="0.266 0.266 0.0915"/>
+        <box size="0.266 0.266 ${chassis_top_z}"/>
       </geometry>
     </collision>
 
@@ -39,15 +45,16 @@
   <joint name="${namespace}wheel_left_joint" type="continuous">
     <parent link="${namespace}base_link"/>
     <child link="${namespace}wheel_left_link"/>
-    <origin xyz="0.035 0.1475 0.023" rpy="-1.57 0 0"/>
+    <origin xyz="0.035 0.1475 ${wheel_radius - base_link_z}" rpy="-1.57 0 0"/>
     <axis xyz="0 0 1"/>
   </joint>
 
   <link name="${namespace}wheel_left_link">
     <visual>
+      <!-- Waffleのタイヤメッシュ(直径66mm・幅18.2mm、mmで幅がy)を実機の車輪の大きさへ拡大する。 -->
       <origin xyz="0 0 0" rpy="1.57 0 0"/>
       <geometry>
-        <mesh filename="package://amr_description/meshes/left_tire.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_description/meshes/left_tire.stl" scale="${wheel_radius / 33} ${wheel_width / 18.2} ${wheel_radius / 33}"/>
       </geometry>
       <material name="dark"/>
     </visual>
@@ -55,7 +62,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <cylinder length="0.018" radius="0.033"/>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}"/>
       </geometry>
     </collision>
 
@@ -71,7 +78,7 @@
   <joint name="${namespace}wheel_right_joint" type="continuous">
     <parent link="${namespace}base_link"/>
     <child link="${namespace}wheel_right_link"/>
-    <origin xyz="0.035 -0.1475 0.023" rpy="-1.57 0 0"/>
+    <origin xyz="0.035 -0.1475 ${wheel_radius - base_link_z}" rpy="-1.57 0 0"/>
     <axis xyz="0 0 1"/>
   </joint>
 
@@ -79,7 +86,7 @@
     <visual>
       <origin xyz="0 0 0" rpy="1.57 0 0"/>
       <geometry>
-        <mesh filename="package://amr_description/meshes/right_tire.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="package://amr_description/meshes/right_tire.stl" scale="${wheel_radius / 33} ${wheel_width / 18.2} ${wheel_radius / 33}"/>
       </geometry>
       <material name="dark"/>
     </visual>
@@ -87,7 +94,7 @@
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <cylinder length="0.018" radius="0.033"/>
+        <cylinder length="${wheel_width}" radius="${wheel_radius}"/>
       </geometry>
     </collision>
 
@@ -149,7 +156,7 @@
   <joint name="${namespace}imu_joint" type="fixed">
     <parent link="${namespace}base_link"/>
     <child link="${namespace}imu_link"/>
-    <origin xyz="-0.11 0 0.065" rpy="0 0 ${pi}"/>
+    <origin xyz="-0.11 0 0.09" rpy="0 0 ${pi}"/>
   </joint>
 
   <link name="${namespace}imu_link">
@@ -164,8 +171,8 @@
 
   <xacro:include filename="t_mini_plus_12.urdf.xacro" />
   <xacro:t_mini_plus_12 name="${namespace}lidar_front_right" parent="${namespace}base_link"
-                        xyz="0.022 -0.104 0.0915" rpy="0 0 0"/>
+                        xyz="0.022 -0.104 ${chassis_top_z}" rpy="0 0 0"/>
   <xacro:t_mini_plus_12 name="${namespace}lidar_rear_left" parent="${namespace}base_link"
-                        xyz="-0.150 0.104 0.0915" rpy="0 0 ${pi}"/>
+                        xyz="-0.150 0.104 ${chassis_top_z}" rpy="0 0 ${pi}"/>
 
 </robot>
