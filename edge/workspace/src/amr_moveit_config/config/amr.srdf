@@ -62,6 +62,7 @@
     <disable_collisions link1="arm_base_link" link2="wheel_right_link" reason="Never"/>
     <disable_collisions link1="arm_camera_mount_link" link2="gripper_link" reason="Adjacent"/>
     <disable_collisions link1="arm_camera_mount_link" link2="hp60c_link" reason="Adjacent"/>
+    <disable_collisions link1="arm_camera_mount_link" link2="moving_jaw_so101_v1_link" reason="Never"/>
     <disable_collisions link1="base_link" link2="caster_back_left_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="caster_back_right_link" reason="Adjacent"/>
     <disable_collisions link1="base_link" link2="lidar_front_right_link" reason="Adjacent"/>

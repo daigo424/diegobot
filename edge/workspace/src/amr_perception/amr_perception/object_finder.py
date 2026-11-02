@@ -53,7 +53,8 @@ class ObjectFinder(Node):
         super().__init__('object_finder')
         models_dir = self.declare_parameter('models_dir', '/data/models').value
         # 探す対象を呼び出しごとに文字で変えるため、学習済み語彙固定の-pf無しのモデルを使う。
-        model_path = self.declare_parameter('model', 'yoloe-26s-seg.pt').value
+        # sだと真上から見た積み木などの確信度が0.25前後で揺れて見落とすため、mにする。
+        model_path = self.declare_parameter('model', 'yoloe-26m-seg.pt').value
         self.conf = self.declare_parameter('conf', 0.25).value
         self.target_frame = self.declare_parameter('target_frame', 'base_link').value
         self.max_image_age = self.declare_parameter('max_image_age', 1.0).value
@@ -68,9 +69,9 @@ class ObjectFinder(Node):
         # selfを渡すとrclpy.spinのexecutorに取られ、処理中はTFが更新されず変換に失敗する。
         self.tf_listener = TransformListener(self.tf_buffer, None, spin_thread=True)
 
-        self.color = None
         self.camera_info = None
-        # カラーと深度は同じ時刻のフレームを組にするため、深度は少し溜めておく。
+        # カラーと深度は同じ時刻のフレームを組にする。別々に届き、最新のカラーの深度がまだ無いことがあるため両方溜めておく。
+        self.colors = deque(maxlen=10)
         self.depths = deque(maxlen=10)
         self.create_subscription(CompressedImage, 'color/image/compressed', self.on_color, qos_profile_sensor_data)
         self.create_subscription(CompressedImage, 'depth/image/compressed', self.on_depth, qos_profile_sensor_data)
@@ -81,7 +82,7 @@ class ObjectFinder(Node):
         self.create_service(FindObjects, '~/find', self.on_find)
 
     def on_color(self, msg):
-        self.color = msg
+        self.colors.append(msg)
 
     def on_depth(self, msg):
         self.depths.append(msg)
@@ -101,17 +102,18 @@ class ObjectFinder(Node):
         if not queries:
             response.message = 'queries is empty'
             return response
-        color_msg, info = self.color, self.camera_info
-        if color_msg is None or info is None:
+        info = self.camera_info
+        if not self.colors or info is None:
             response.message = 'no color image or camera_info received yet'
+            return response
+        pairs = ((c, self.matching_depth(c.header.stamp)) for c in reversed(list(self.colors)))
+        color_msg, depth_msg = next(((c, d) for c, d in pairs if d is not None), (None, None))
+        if color_msg is None:
+            response.message = 'no depth image matching the color images'
             return response
         age = self.get_clock().now() - Time.from_msg(color_msg.header.stamp)
         if age > Duration(seconds=self.max_image_age):
-            response.message = f'latest color image is {age.nanoseconds / 1e9:.1f}s old'
-            return response
-        depth_msg = self.matching_depth(color_msg.header.stamp)
-        if depth_msg is None:
-            response.message = 'no depth image matching the color image'
+            response.message = f'latest color image with depth is {age.nanoseconds / 1e9:.1f}s old'
             return response
 
         frame = cv2.imdecode(np.frombuffer(color_msg.data, np.uint8), cv2.IMREAD_COLOR)

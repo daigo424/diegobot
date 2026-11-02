@@ -72,7 +72,8 @@ def generate_launch_description():
             {'depth_height': 480},
             {'rgb_width': 640},
             {'rgb_height': 480},
-            {'fps': 30},
+            # Pi 4では30だとドライバと圧縮の処理が追いつかず、画像が数秒遅れて届く。
+            {'fps': 15},
         ],
     )
 

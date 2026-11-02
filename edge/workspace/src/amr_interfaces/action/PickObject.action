@@ -1,0 +1,19 @@
+# つかむ対象。object_finderの文字指定に渡すため英語の短い名詞句にする(例: "block")。
+string query
+# 色で絞り込む(DetectedObjectのcolorと同じ名前)。空なら色を問わない。
+string color
+---
+uint8 SUCCESS=0
+uint8 NOT_FOUND=1
+uint8 OUT_OF_REACH=2
+uint8 PLANNING_FAILED=3
+uint8 EXECUTION_FAILED=4
+uint8 GRASP_FAILED=5
+uint8 CANCELED=6
+uint8 error_code
+string message
+# 対象にした物体。OUT_OF_REACHのときは、近づく側がこの位置を使う。
+DetectedObject object
+---
+# 今の段階(looking, finding, opening, approaching, grasping, lifting, retreating)
+string stage

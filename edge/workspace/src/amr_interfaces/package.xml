@@ -3,7 +3,7 @@
 <package format="3">
   <name>amr_interfaces</name>
   <version>0.0.0</version>
-  <description>Messages and services shared between diegobot nodes</description>
+  <description>Messages, services and actions shared between diegobot nodes</description>
   <maintainer email="ishii.daigo@gmail.com">daigo424</maintainer>
   <license>MIT</license>
 

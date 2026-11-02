@@ -1,0 +1,32 @@
+object_picker:
+  ros__parameters:
+    arm_joints: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll]
+    # 車体の前の床(base_linkから前に約0.13〜0.43m)をカメラから0.26m以上離れて写す姿勢。深度は0.2mより近いと取れない。
+    # 手首をこれ以上曲げるとグリッパーが肩に当たる。
+    look_joints: [0.0, -1.65, 1.3, 1.45, -1.5708]
+    # 逆運動学の初期値(5関節ずつ)。肘を上にした解に寄せる。
+    ik_seeds: [0.0, -1.65, 1.3, 1.45, -1.5708,
+               0.0, 1.0, -0.2, 0.8, -1.5708,
+               0.0, 0.5, 0.6, 1.0, -1.5708,
+               0.0, 0.0, 1.15, 0.41, -1.5708]
+    grasp_roll: -1.5708
+    # 物体の中心を置く点(tip_linkの座標系)。tip_linkは固定側の指先で、可動側は-x側から閉じてくる。
+    # gripper_open 0.7radで指の内側の間隔は約5.2cmになり、その中央付近。
+    tcp_offset: [-0.025, 0.0, 0.0]
+    # 車体の前端(base_linkから0.079m)より手前は車体に当たる。
+    min_reach_x: 0.10
+    pregrasp_height: 0.08  # m
+    grasp_depth: 0.015  # m
+    # 固定側の指先は道具点(gripper_frame_link)より約6mm下に出るため、床に当てない高さ。
+    min_tool_z: 0.012  # m
+    lift_height: 0.10  # m
+    linear_speed: 0.03  # m/s
+    # 止まってから撮った画像が届くまで待つ。
+    settle_time: 1.5  # s
+    find_attempts: 4
+    velocity_scaling: 0.5
+    # 開きすぎると可動側の指先が固定側より高く上がり、閉じるときに物体を上から叩く。
+    gripper_open: 0.7  # rad
+    gripper_close: -0.1745  # rad
+    # 閉じた後の位置がこれ以下なら何も挟んでいない。
+    empty_grip_position: -0.10  # rad

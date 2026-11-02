@@ -9,6 +9,7 @@ find_package(vision_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/DetectedObject.msg
   srv/FindObjects.srv
+  action/PickObject.action
   DEPENDENCIES geometry_msgs vision_msgs
 )
 
