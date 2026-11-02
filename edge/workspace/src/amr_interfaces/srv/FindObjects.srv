@@ -1,0 +1,6 @@
+# 探す対象。YOLOEの文字指定に渡すため英語の短い名詞句にする(例: "blue block")。
+string[] queries
+---
+bool success
+string message
+DetectedObject[] objects

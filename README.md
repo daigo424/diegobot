@@ -9,6 +9,9 @@ The long-term goal is to build something like a TurtleBot3 Waffle.
 
 See [doc/wiring.md](doc/wiring.md) for hardware details.
 
+| Find objects with YOLOE-26 |
+| - |
+| ![find-objects-with-yolo.png](doc/images/find-objects-with-yolo.png) |
 
 https://github.com/user-attachments/assets/dc853809-cab7-45fa-803e-697c4c420df1
 

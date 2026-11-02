@@ -47,4 +47,15 @@ def generate_launch_description():
         remappings=[('image/compressed', f'{PREFIX}/color/image_raw/compressed')],
     )
 
-    return LaunchDescription([model, container, object_detector])
+    object_finder = Node(
+        package='amr_perception',
+        executable='object_finder',
+        output='both',
+        remappings=[
+            ('color/image/compressed', f'{PREFIX}/color/image_raw/compressed'),
+            ('depth/image/compressed', f'{PREFIX}/depth/image_raw/compressed'),
+            ('color/camera_info', f'{PREFIX}/color/camera_info'),
+        ],
+    )
+
+    return LaunchDescription([model, container, object_detector, object_finder])
