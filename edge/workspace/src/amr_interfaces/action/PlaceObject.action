@@ -1,0 +1,16 @@
+# 持っている物を置く位置。zは置く面の高さ(床なら床)。frame_idが空なら既定の場所(車体の前の床)に置く。
+geometry_msgs/PointStamped position
+# trueならアームを動かさず、その場でグリッパーを開いて離すだけ。
+bool release_here
+---
+uint8 SUCCESS=0
+uint8 NOT_HOLDING=1
+uint8 OUT_OF_REACH=2
+uint8 PLANNING_FAILED=3
+uint8 EXECUTION_FAILED=4
+uint8 CANCELED=5
+uint8 error_code
+string message
+---
+# 今の段階(approaching, lowering, releasing, lifting, retreating)
+string stage

@@ -51,7 +51,7 @@ PKG                ?=
 PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
 # サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
 # (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
-SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation
+SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation amr_behaviors
 PI_WS_SRC_PATHS    := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
 WS_SRC_PATHS       := $(PI_WS_SRC_PATHS)
@@ -106,10 +106,15 @@ MODEL ?=
 perception:
 	$(EXEC) perception bash -c "source $(ROS_INSTALL_PREFIX)/setup.bash && source $(ROS2_WS)/install/local_setup.bash && ros2 launch amr_perception perception.launch.py $(if $(MODEL),model:=$(MODEL))"
 
-# 実機のアームを開発機のMoveItで計画し、カメラで見つけた物をつかむアクション(/object_picker/pick)を出す。
+# 実機のアームを開発機のMoveItで計画し、カメラで見つけた物をつかむ・置くアクション(/manipulator/pick, /manipulator/place)を出す。
 # 物を探すため、先にmake perceptionも起動しておく。
 manipulation:
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_manipulation manipulation.launch.py $(if $(RVIZ),use_rviz:=true)"
+
+# manipulationに加え、探す・近づくアクション(/behavior_server/search, /behavior_server/approach)を出す。
+# 車体が動くため、周りに物が無い床で使う。先にmake perceptionも起動しておく。
+behaviors:
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_behaviors behaviors.launch.py $(if $(RVIZ),use_rviz:=true)"
 
 # 実機のロボットモデル・TF・センサーを開発機のRVizで見る。
 view-robot:

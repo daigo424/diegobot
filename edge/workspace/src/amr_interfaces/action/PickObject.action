@@ -1,5 +1,6 @@
-# つかむ対象。object_finderの文字指定に渡すため英語の短い名詞句にする(例: "block")。
-string query
+# つかむ対象。object_finderの文字指定に渡すため英語の短い名詞句にする。見え方でYOLOEの確信度が
+# 大きく変わるため、言い換えを並べるとどれかで見つかりやすい(例: ["block", "cube", "box"])。
+string[] queries
 # 色で絞り込む(DetectedObjectのcolorと同じ名前)。空なら色を問わない。
 string color
 ---

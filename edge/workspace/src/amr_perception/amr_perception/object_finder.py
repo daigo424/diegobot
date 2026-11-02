@@ -53,11 +53,19 @@ class ObjectFinder(Node):
         super().__init__('object_finder')
         models_dir = self.declare_parameter('models_dir', '/data/models').value
         # 探す対象を呼び出しごとに文字で変えるため、学習済み語彙固定の-pf無しのモデルを使う。
-        # sだと真上から見た積み木などの確信度が0.25前後で揺れて見落とすため、mにする。
+        # sだと真上から見た積み木などの確信度がしきい値の前後で揺れて見落とすため、mにする。
         model_path = self.declare_parameter('model', 'yoloe-26m-seg.pt').value
         self.conf = self.declare_parameter('conf', 0.25).value
         self.target_frame = self.declare_parameter('target_frame', 'base_link').value
-        self.max_image_age = self.declare_parameter('max_image_age', 1.0).value
+        # 位置は撮った時刻のTFで変換するので古い画像でも正しい。画像が止まったことだけを見分ければよい。
+        # 車体とアームを同時に動かすと、ラズパイの負荷で大きく遅れることがある。
+        self.max_image_age = self.declare_parameter('max_image_age', 2.0).value
+        # target_frameでの床の高さ。
+        self.floor_z = self.declare_parameter('floor_z', -0.00945).value
+        # 深度で求めた点が床からこの高さ未満なら、物体の段差が深度に出ていないとみなす。
+        self.flat_threshold = self.declare_parameter('flat_threshold', 0.01).value
+        # そのときは、マスクの重心を通る視線と床からこの高さの水平面との交点を位置にする。
+        self.flat_object_height = self.declare_parameter('flat_object_height', 0.015).value
 
         os.makedirs(models_dir, exist_ok=True)
         os.chdir(models_dir)
@@ -127,7 +135,8 @@ class ObjectFinder(Node):
             self.model.set_classes(queries)
             self.classes = queries
         # 深度と画素単位で重ねるため、マスクを入力画像の解像度で受け取る。
-        result = self.model.predict(frame, conf=self.conf, retina_masks=True, verbose=False)[0]
+        conf = request.min_score if request.min_score > 0.0 else self.conf
+        result = self.model.predict(frame, conf=conf, retina_masks=True, verbose=False)[0]
 
         fx, fy, cx, cy = info.k[0], info.k[4], info.k[2], info.k[5]
         masks = result.masks.data.cpu().numpy().astype(bool) if result.masks is not None else []
@@ -151,6 +160,10 @@ class ObjectFinder(Node):
                     obj.position = self.tf_buffer.transform(point, self.target_frame, timeout=Duration(seconds=0.2))
                     obj.position_valid = True
                     obj.width, obj.height = box[2] * z / fx, box[3] * z / fy
+                    if obj.position.point.z < self.floor_z + self.flat_threshold:
+                        # 深度が小さな物の段差を床とならしてしまうことがあり、そのままだと点が視線に沿って奥・下へずれる。
+                        ms, mu = np.nonzero(mask)
+                        self.project_to_plane(obj.position, point.header, (mu.mean() - cx) / fx, (ms.mean() - cy) / fy)
                 except TransformException as e:
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
             response.objects.append(obj)
@@ -159,6 +172,22 @@ class ObjectFinder(Node):
         response.message = f'found {len(response.objects)} object(s)'
         self.publish_debug(color_msg.header, result, response.objects)
         return response
+
+    def project_to_plane(self, position, camera_header, ray_x, ray_y):
+        """カメラから正規化座標(ray_x, ray_y)の向きへ伸ばした視線と、床からflat_object_heightの面との交点へ置き換える。"""
+        t = self.tf_buffer.lookup_transform(self.target_frame, camera_header.frame_id, camera_header.stamp,
+                                            timeout=Duration(seconds=0.2))
+        q, o = t.transform.rotation, t.transform.translation
+        x, y, z, w = q.x, q.y, q.z, q.w
+        rotation = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+                             [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+                             [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]])
+        d = rotation @ np.array([ray_x, ray_y, 1.0])
+        plane = self.floor_z + self.flat_object_height
+        if d[2] >= -1e-6:
+            return
+        s = (plane - o.z) / d[2]
+        position.point.x, position.point.y, position.point.z = o.x + s * d[0], o.y + s * d[1], plane
 
     def publish_debug(self, header, result, objects):
         if self.image_pub.get_subscription_count() > 0:

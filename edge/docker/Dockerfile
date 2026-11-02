@@ -7,7 +7,7 @@
 # サーバー側でだけ動かすパッケージ(MakefileのSERVER_PKGS)の依存は入れない。
 FROM ros:jazzy-ros-base AS workspace-package-xml
 COPY --from=workspace src /src
-RUN mkdir /out && cd /src && find . \( -path ./amr_perception -o -path ./amr_moveit_config -o -path ./amr_manipulation \) -prune -o -name package.xml -exec cp --parents {} /out/ \;
+RUN mkdir /out && cd /src && find . \( -path ./amr_perception -o -path ./amr_moveit_config -o -path ./amr_manipulation -o -path ./amr_behaviors \) -prune -o -name package.xml -exec cp --parents {} /out/ \;
 
 # 実機(ラズパイ、arm64)用。osrf/ros:jazzy-desktop系はamd64ビルドしか配布されておらず
 # arm64ではexec format errorになるため、公式のマルチアーキ(amd64/arm64)イメージを使う。

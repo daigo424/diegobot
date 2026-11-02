@@ -18,12 +18,12 @@ setup(
     zip_safe=True,
     maintainer='daigo424',
     maintainer_email='ishii.daigo@gmail.com',
-    description='Server-side arm actions for diegobot: picking objects found by the camera.',
+    description='Server-side arm actions for diegobot: picking objects found by the camera and placing them.',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'object_picker = amr_manipulation.object_picker:main',
+            'manipulator = amr_manipulation.manipulator:main',
         ],
     },
 )

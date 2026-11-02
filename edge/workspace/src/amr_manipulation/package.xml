@@ -3,7 +3,7 @@
 <package format="3">
   <name>amr_manipulation</name>
   <version>0.0.0</version>
-  <description>Server-side arm actions for diegobot: picking objects found by the camera.</description>
+  <description>Server-side arm actions for diegobot: picking objects found by the camera and placing them.</description>
   <maintainer email="ishii.daigo@gmail.com">daigo424</maintainer>
   <license>MIT</license>
 
@@ -13,6 +13,9 @@
   <exec_depend>trajectory_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>moveit_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>amr_interfaces</exec_depend>
   <exec_depend>amr_moveit_config</exec_depend>
   <exec_depend>launch_ros</exec_depend>

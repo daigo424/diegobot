@@ -1,5 +1,7 @@
 # 探す対象。YOLOEの文字指定に渡すため英語の短い名詞句にする(例: "blue block")。
 string[] queries
+# これ以上の確信度の物だけ返す。0ならobject_finderの既定値(conf)。遠くの小さな物を探すときは下げる。
+float32 min_score
 ---
 bool success
 string message

@@ -1,0 +1,18 @@
+# 近づく対象。PickObjectと同じく英語の短い名詞句(言い換えを並べてよい)と、色(空なら問わない)。
+string[] queries
+string color
+# 止まる位置(物体までのbase_linkから前の距離[m])。0なら既定値(つかめる位置)。
+float32 standoff
+---
+uint8 SUCCESS=0
+uint8 NOT_FOUND=1
+uint8 DRIVE_FAILED=2
+uint8 CANCELED=3
+uint8 error_code
+string message
+# 止まった後に測り直した物体。位置はbase_link基準。
+DetectedObject object
+---
+# 今の段階(looking, turning, driving)と、物体までの残りの距離[m]
+string stage
+float32 remaining

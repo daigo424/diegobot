@@ -1,0 +1,50 @@
+behavior_server:
+  ros__parameters:
+    arm_joints: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll]
+    # 探すときの姿勢(5関節ずつ、この順に見る)。最初は車体の前の床を見下ろす姿勢、続いてstandbyの肩・肘・手首で
+    # 遠くを、付け根を振って見る(隣の姿勢とカメラの写る範囲が少し重なる刻み)。
+    search_poses: [0.0, -1.65, 1.3, 1.45, -1.5708,
+                   0.0, -1.65, 1.4, 0.8519, -1.5708,
+                   -0.9, -1.65, 1.4, 0.8519, -1.5708,
+                   0.9, -1.65, 1.4, 0.8519, -1.5708,
+                   -1.8, -1.65, 1.4, 0.8519, -1.5708,
+                   1.8, -1.65, 1.4, 0.8519, -1.5708]
+    # 車体を回して探すときのアームの姿勢(standby)。
+    far_view: [0.0, -1.65, 1.4, 0.8519, -1.5708]
+    # 近づいた後に物体を測り直す姿勢(manipulatorの見下ろす姿勢と同じ)。
+    near_view: [0.0, -1.65, 1.3, 1.45, -1.5708]
+    # 近づく間はカメラを物体へ向け続ける。肩・肘・手首のひねりはgaze_poseで固定し、gaze_jointsだけ動かす。
+    gaze_pose: [0.0, -1.65, 1.3, 0.85, -1.5708]
+    gaze_joints: [shoulder_pan, wrist_flex]
+    # 手首をこれより曲げるとグリッパーが肩に当たる。
+    gaze_wrist_limits: [0.3, 1.45]  # rad
+    gaze_period: 0.2  # s
+    settle_time: 1.5  # s
+    find_attempts: 4
+    # 探す・見続けるときの確信度の下限。遠くの小さな物はobject_finderの既定値前後になり見落とすため下げる(色でも絞る)。
+    search_min_score: 0.15
+    # 既定の止まる位置(base_linkから前の距離)。manipulatorの見下ろす姿勢に写り、つかめる範囲の中ほど。
+    standoff: 0.18  # m
+    # 車軸の中点。差動二輪はここを中心に回る。
+    rotation_center_x: 0.035  # m
+    # 追っている物体の推定位置からこの距離以内の検出だけで更新する(似た物に乗り換えないため)。
+    track_gate: 0.25  # m
+    lost_timeout: 3.0  # s
+    approach_timeout: 90.0  # s
+    # ESP32のモーターは指令をそのままPWMの比率にし速度制御が無いため、実際の速さは指令より遅く、
+    # 遅い指令ではほぼ動かない。
+    turn_speed: 1.0  # rad/s
+    min_turn_speed: 0.7  # rad/s
+    # 物体の向きのずれがこれより大きければその場で回り、小さければ前進しながら向きを直す。
+    turn_in_place_angle: 0.2  # rad
+    yaw_tolerance: 0.05  # rad
+    drive_speed: 0.16  # m/s
+    min_drive_speed: 0.11  # m/s
+    steer_gain: 1.5
+    distance_tolerance: 0.015  # m
+    # 前進中、車体の前端(front_x)からstop_distance以内、幅half_width以内にLiDARの点があれば止まる。
+    front_x: 0.079  # m
+    half_width: 0.17  # m
+    stop_distance: 0.12  # m
+    # 1回の近づく動作で走る距離の上限。誤った位置で遠くへ走り出さないため。
+    max_drive: 1.5  # m
