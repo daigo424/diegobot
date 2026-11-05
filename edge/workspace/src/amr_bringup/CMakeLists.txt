@@ -12,7 +12,7 @@ install(DIRECTORY launch config rviz worlds textures
   DESTINATION share/${PROJECT_NAME}/
 )
 
-install(PROGRAMS scripts/move_arm_to_standby.py scripts/arm_bringup.sh
+install(PROGRAMS scripts/move_arm_to_standby.py scripts/arm_bringup.sh scripts/depth_watchdog.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

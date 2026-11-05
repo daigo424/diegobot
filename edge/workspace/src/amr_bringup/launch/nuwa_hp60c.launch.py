@@ -2,7 +2,9 @@ import os
 import platform
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, EmitEvent, RegisterEventHandler
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -94,4 +96,17 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([ascamera_dir, ascamera_node, extras_container])
+    # カメラが深度の大きく抜けた状態から戻らなくなることがあり、ドライバを開き直すと直る。見張りが終了したら
+    # launchごと止め、コンテナの再起動(restart: unless-stopped)でカメラを開き直す。
+    depth_watchdog = Node(
+        namespace=f'{NAMESPACE}/{NODE_NAME}',
+        package='amr_bringup',
+        executable='depth_watchdog.py',
+        output='both',
+    )
+    reopen_on_watchdog_exit = RegisterEventHandler(OnProcessExit(
+        target_action=depth_watchdog,
+        on_exit=[EmitEvent(event=Shutdown(reason='depth watchdog requested reopening the camera'))],
+    ))
+
+    return LaunchDescription([ascamera_dir, ascamera_node, extras_container, depth_watchdog, reopen_on_watchdog_exit])
