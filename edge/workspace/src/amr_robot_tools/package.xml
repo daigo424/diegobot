@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>amr_robot_tools</name>
+  <version>0.0.0</version>
+  <description>Server-side HTTP API for diegobot that lets an LLM agent (Dify) call the robot's search, approach, pick and place actions.</description>
+  <maintainer email="ishii.daigo@gmail.com">daigo424</maintainer>
+  <license>MIT</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>amr_interfaces</exec_depend>
+  <exec_depend>amr_manipulation</exec_depend>
+  <exec_depend>python3-fastapi</exec_depend>
+  <exec_depend>python3-uvicorn</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>python3-httpx</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

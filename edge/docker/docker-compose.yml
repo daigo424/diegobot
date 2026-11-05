@@ -39,7 +39,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
     working_dir: /workspace
     env_file:
-      - ../../.env
+      - ../.env
     restart: unless-stopped
 
   rosbridge:

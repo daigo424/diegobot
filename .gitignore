@@ -66,3 +66,6 @@ testing/eval-reports/
 # Third-party meshes with no redistribution terms (see amr_description/meshes/README.md for how to get them)
 edge/workspace/src/amr_description/meshes/camera_NUWA_HP60C.stl
 edge/workspace/src/amr_description/meshes/lidar.stl
+
+# Dify (server/dify): the official docker/ directory is fetched at a pinned version by make dify-fetch
+server/dify/vendor/

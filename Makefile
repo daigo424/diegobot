@@ -14,10 +14,12 @@ else
 GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-native.yml
 endif
 # 無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
-# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROS/アームは.envのデバイスパスが
+# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROS/アームはedge/.envのデバイスパスが
 # 存在するかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
 ROBOT_ATTACHED     ?= 1
-_HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./.env 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
+# edge(ロボット側のROS一式)のコンテナが使う環境変数(デバイスパス・ROS_DOMAIN_ID等)。
+EDGE_ENV           := edge/.env
+_HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./$(EDGE_ENV) 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
 LIDAR_FRONT_RIGHT_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_FRONT_RIGHT_PORT)
 LIDAR_REAR_LEFT_ATTACHED   ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_REAR_LEFT_PORT)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
@@ -51,7 +53,7 @@ PKG                ?=
 PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
 # サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
 # (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
-SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation amr_behaviors
+SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation amr_behaviors amr_robot_tools
 PI_WS_SRC_PATHS    := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
 WS_SRC_PATHS       := $(PI_WS_SRC_PATHS)
@@ -70,9 +72,8 @@ CMD_ROS2_SOURCE    := source $(ROS_INSTALL_PREFIX)/setup.bash && source /opt/ros
 CMD_ROS2_WS_SOURCE := test -f $(ROS2_WS)/install/setup.bash && source $(ROS2_WS)/install/setup.bash || true
 
 up:
-	@test -f .env || cp .env.example .env
-	$(COMPOSE) --env-file .env up -d
-	@. ./.env 2>/dev/null;
+	@test -f $(EDGE_ENV) || cp $(EDGE_ENV).example $(EDGE_ENV)
+	$(COMPOSE) --env-file $(EDGE_ENV) up -d
 	$(MAKE) install-packages
 
 # カメラ・LiDAR・Picoのいずれも未接続な開発機から、ラズパイ実機のtopicをrviz2等で
@@ -88,14 +89,14 @@ up-pico-remote:
 # ラズパイ起動時にsystemd(edge/provisioning/diegobot.service.template)から呼ばれる。
 # Wi-Fi未接続でも起動できるようinstall-packagesは行わない。
 up-boot:
-	@test -f .env || cp .env.example .env
-	$(COMPOSE) --env-file .env up -d
+	@test -f $(EDGE_ENV) || cp $(EDGE_ENV).example $(EDGE_ENV)
+	$(COMPOSE) --env-file $(EDGE_ENV) up -d
 
 down:
-	$(COMPOSE) --env-file .env down
+	$(COMPOSE) --env-file $(EDGE_ENV) down
 
 build:
-	$(COMPOSE) --env-file .env build
+	$(COMPOSE) --env-file $(EDGE_ENV) build
 
 login:
 	$(EXEC) $(ROS2_SERVICE) bash
@@ -115,6 +116,12 @@ manipulation:
 # 車体が動くため、周りに物が無い床で使う。先にmake perceptionも起動しておく。
 behaviors:
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_behaviors behaviors.launch.py $(if $(RVIZ),use_rviz:=true)"
+
+# Dify(LLM)から探す・近づく・つかむ・置くを呼ぶHTTP API(/openapi.jsonがスキーマ)。make perceptionとmake behaviorsも起動しておく。
+# edge/.envはコンテナを作るときにしか読まれないため、起動のたびにその時点の値を渡す。
+robot-tools:
+	@. ./$(EDGE_ENV) && $(EXEC) -e ROBOT_TOOLS_PUBLIC_URL="$$ROBOT_TOOLS_PUBLIC_URL" -e ROBOT_TOOLS_API_KEY="$$ROBOT_TOOLS_API_KEY" \
+	  $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_robot_tools robot_tools"
 
 # 実機のロボットモデル・TF・センサーを開発機のRVizで見る。
 view-robot:
@@ -198,6 +205,7 @@ pi-rsync:
 	  --exclude=edge/workspace/install/ \
 	  --exclude=edge/workspace/log/ \
 	  --exclude=edge/workspace/build-arm64/ \
+	  --exclude=server/ \
 	  --exclude=edge/workspace/core \
 	  --exclude=edge/workspace/core.* \
 	  --include=edge/workspace/src/vendor/ \
@@ -263,6 +271,37 @@ pi-cross-build: ensure-arm64-emulation
 	  -v $(CURDIR)/$(PI_CROSS_DIR)/log:$(ROS2_WS)/log \
 	  -w $(ROS2_WS) $(PI_IMAGE_TAG) bash -c "$(CMD_ROS2_SOURCE) && colcon build --event-handlers status- --base-paths $(PI_WS_SRC_PATHS) --cmake-args -DCMAKE_BUILD_TYPE=Release --no-warn-unused-cli --packages-up-to $(PKG_NAME)"
 	rsync -az --delete -e "ssh $(PI_SSH_OPTS)" $(PI_CROSS_DIR)/install/$(PKG_NAME)/ $(PI_USER)@$(PI_HOST):~/diegobot/edge/workspace/install/$(PKG_NAME)/
+
+# サーバー機で動かすDify(LLMアプリ基盤)。公式リポジトリのdocker/だけを版を固定して取得し、設定はserver/dify/.envに置く。
+DIFY_VERSION := 1.18.0
+DIFY_DIR     := server/dify
+DIFY_DOCKER  := $(DIFY_DIR)/vendor/docker
+DIFY_COMPOSE := docker compose --project-directory $(DIFY_DOCKER) -f $(DIFY_DOCKER)/docker-compose.yaml --env-file $(DIFY_DOCKER)/.env -p dify
+dify-fetch:
+	@if [ ! -d $(DIFY_DIR)/vendor/.git ]; then \
+	  git clone --depth 1 --branch $(DIFY_VERSION) --filter=blob:none --sparse https://github.com/langgenius/dify.git $(DIFY_DIR)/vendor && \
+	  git -C $(DIFY_DIR)/vendor sparse-checkout set docker; \
+	elif [ "$$(git -C $(DIFY_DIR)/vendor describe --tags)" != "$(DIFY_VERSION)" ]; then \
+	  git -C $(DIFY_DIR)/vendor fetch --depth 1 origin tag $(DIFY_VERSION) && git -C $(DIFY_DIR)/vendor checkout $(DIFY_VERSION); \
+	fi
+# server/dify/.envには変える値だけを置く。local_sandboxとagent_backendは認証トークンが空だと起動しない
+# (公式の見本では空)ため、無ければ作って足す。
+# DB_HOST等は渡さないとlocalhostになるため、公式の見本(起動に要る項目の一覧)の同じ名前の行をserver/dify/.envの値で
+# 置き換えたものを、公式のcomposeが各サービスのenv_fileで読むvendor/docker/.envとして起動のたびに作る。
+dify-up: dify-fetch
+	@test -f $(DIFY_DIR)/.env || cp $(DIFY_DIR)/.env.example $(DIFY_DIR)/.env
+	@grep -q '^DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN=.' $(DIFY_DIR)/.env || \
+	  echo "DIFY_AGENT_LOCAL_SANDBOX_AUTH_TOKEN=$$(openssl rand -hex 32)" >> $(DIFY_DIR)/.env
+	@test -f $(DIFY_DOCKER)/envs/core-services/shared.env || \
+	  cp $(DIFY_DOCKER)/envs/core-services/shared.env.example $(DIFY_DOCKER)/envs/core-services/shared.env
+	@rm -f $(DIFY_DOCKER)/.env
+	@awk ' \
+	  NR == FNR { if ($$0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) { k = substr($$0, 1, index($$0, "=") - 1); o[k] = $$0 } next } \
+	  { k = substr($$0, 1, index($$0, "=") - 1); if (index($$0, "=") > 1 && k in o) { print o[k]; delete o[k] } else print } \
+	  END { for (k in o) print o[k] }' $(DIFY_DIR)/.env $(DIFY_DOCKER)/.env.example > $(DIFY_DOCKER)/.env
+	$(DIFY_COMPOSE) up -d
+dify-down:
+	$(DIFY_COMPOSE) down
 
 # flutterはsnap経由でインストールされ/snap/binに入るが、呼び出し元シェルのPATHに
 # /snap/binが無いと"flutter: not found"になるため、ここで明示的に足す。

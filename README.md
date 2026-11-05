@@ -50,7 +50,7 @@ Motor check:
 make teleop-twist-keyboard   # Drive by sending /cmd_vel from the keyboard
 ```
 
-The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (the microcontroller) from `HOST_MICRO_ROS_PORT` in `.env`. Numbers like `/dev/ttyUSB*` can swap with the LiDAR depending on plug order, so specify the path under `/dev/serial/by-id/` instead (check with `ls -l /dev/serial/by-id/`).
+The `micro-ros-agent` service in `edge/docker/docker-compose.yml` takes the host's USB serial port (the microcontroller) from the `HOST_MICRO_ROS_PORT` environment variable (see `edge/.env.example`). Numbers like `/dev/ttyUSB*` can swap with the LiDAR depending on plug order, so specify the path under `/dev/serial/by-id/` instead (check with `ls -l /dev/serial/by-id/`).
 
 ## Microcontroller firmware
 
