@@ -54,17 +54,21 @@ def find_objects(find_client, queries, color, attempts, min_score=0.0):
     """object_finderで探し、深度のある物を色で絞ってスコア順に返す。(objects, message)。"""
     # YOLOEは色の語があると物の種類の確信度が上がる一方、色の違う物も拾うため、色は判定結果でも絞る。
     targets = [f'{color} {q}'.strip() for q in queries if q.strip()]
-    response = None
-    # ラズパイの負荷で画像が遅れて届くことがあり、その間object_finderは古いとして断るため、少し待って探し直す。
-    for _ in range(attempts):
+    message = 'object_finder did not answer'
+    # ラズパイの負荷で画像が遅れて届くとobject_finderは古いとして断り、アームを動かした直後は写っていても
+    # 検出されない画像があるため、別の画像で探し直す。
+    for i in range(attempts):
+        if i:
+            time.sleep(0.5)
         response = call(find_client, FindObjects.Request(queries=targets, min_score=float(min_score)), 15.0)
-        if response is not None and response.success:
-            break
-        time.sleep(0.5)
-    if response is None:
-        return [], 'object_finder did not answer'
-    if not response.success:
-        return [], response.message
-    objects = [o for o in response.objects if o.position_valid and (not color or o.color == color)]
-    objects.sort(key=lambda o: o.score, reverse=True)
-    return objects, '' if objects else f'no {" / ".join(targets)} with depth'
+        if response is None:
+            continue
+        if not response.success:
+            message = response.message
+            continue
+        objects = [o for o in response.objects if o.position_valid and (not color or o.color == color)]
+        objects.sort(key=lambda o: o.score, reverse=True)
+        message = f'no {" / ".join(targets)} with depth'
+        if objects:
+            return objects, ''
+    return [], message

@@ -38,10 +38,6 @@ class Failed(Exception):
         self.code = code
 
 
-def wrap(angle):
-    return math.atan2(math.sin(angle), math.cos(angle))
-
-
 def yaw_of(q):
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
 
@@ -54,8 +50,6 @@ class BehaviorServer(Node):
         p = self.declare_parameter
         self.arm_joints = p('arm_joints', ['']).value
         self.search_poses = p('search_poses', [0.0]).value
-        self.far_view = p('far_view', [0.0]).value
-        self.near_view = p('near_view', [0.0]).value
         self.gaze_pose = p('gaze_pose', [0.0]).value
         self.gaze_joints = p('gaze_joints', ['']).value
         self.gaze_wrist_limits = p('gaze_wrist_limits', [0.3, 1.45]).value
@@ -71,6 +65,7 @@ class BehaviorServer(Node):
         self.standoff = p('standoff', 0.18).value
         self.rotation_center_x = p('rotation_center_x', 0.035).value
         self.track_gate = p('track_gate', 0.25).value
+        self.track_max_step = p('track_max_step', 0.08).value
         self.lost_timeout = p('lost_timeout', 3.0).value
         self.approach_timeout = p('approach_timeout', 90.0).value
         self.turn_speed = p('turn_speed', 1.0).value
@@ -85,6 +80,8 @@ class BehaviorServer(Node):
         self.half_width = p('half_width', 0.17).value
         self.stop_distance = p('stop_distance', 0.12).value
         self.max_drive = p('max_drive', 1.5).value
+        self.sighting_max_age = p('sighting_max_age', 600.0).value
+        self.sighting_max_offset = p('sighting_max_offset', 0.2).value
 
         group = ReentrantCallbackGroup()
         self.odom = None
@@ -92,6 +89,7 @@ class BehaviorServer(Node):
         self.gaze = None
         self.joints = {}
         self.busy = False
+        self.sighting = None
         self.lock = threading.Lock()
         self.tf_buffer = Buffer()
         # 検出を待つ間もTFを受け取り続けるため、専用ノード(node=None)を別スレッドで回す。
@@ -137,7 +135,7 @@ class BehaviorServer(Node):
     def execute_search(self, goal_handle):
         req, result = goal_handle.request, SearchObject.Result()
         try:
-            obj, message = self.search(goal_handle, req.queries, req.color, req.rotate_base,
+            obj, message = self.search(goal_handle, req.queries, req.color,
                                        lambda stage, heading: SearchObject.Feedback(stage=stage, heading=heading))
             result.message = message
             if obj is None:
@@ -157,33 +155,65 @@ class BehaviorServer(Node):
             self.busy = False
         return result
 
-    def search(self, goal_handle, queries, color, rotate_base, feedback):
+    def search(self, goal_handle, queries, color, feedback):
         """見つかれば(物体, 説明)、見つからなければ(None, 説明)を返す。"""
         n = len(self.arm_joints)
         poses = [self.search_poses[i:i + n] for i in range(0, len(self.search_poses), n)]
+        return self.look_through(goal_handle, poses, queries, color, feedback)
+
+    def look_through(self, goal_handle, poses, queries, color, feedback):
         message = ''
-        for turn in ([0.0, math.pi] if rotate_base else [0.0]):
-            if turn:
-                self.check_cancel(goal_handle)
-                goal_handle.publish_feedback(feedback('turning', 0.0))
-                self.arm_to(self.far_view)
-                self.rotate(goal_handle, turn)
-            for pose in poses:
-                self.check_cancel(goal_handle)
-                # 付け根(先頭の関節)は正の向きでカメラが右(base_linkの−y)を向く。
-                goal_handle.publish_feedback(feedback('looking', -pose[0]))
-                try:
-                    self.arm_to(pose)
-                except Failed as e:
-                    self.get_logger().warn(f'skip search pose {pose}: {e}')
-                    continue
-                time.sleep(self.settle_time)
-                objects, message = find_objects(self.find_client, queries, color, self.find_attempts,
-                                                self.search_min_score)
-                if objects:
-                    p = objects[0].position.point
-                    return objects[0], f'found {objects[0].label} at ({p.x:.2f}, {p.y:.2f})'
+        for pose in poses:
+            self.check_cancel(goal_handle)
+            # 付け根(先頭の関節)は正の向きでカメラが右(base_linkの−y)を向く。
+            goal_handle.publish_feedback(feedback('looking', -pose[0]))
+            try:
+                self.arm_to(pose)
+            except Failed as e:
+                self.get_logger().warn(f'skip search pose {pose}: {e}')
+                continue
+            time.sleep(self.settle_time)
+            objects, message = find_objects(self.find_client, queries, color, self.find_attempts,
+                                            self.search_min_score)
+            if objects:
+                self.remember(objects[0])
+                p = objects[0].position.point
+                return objects[0], f'found {objects[0].label} at ({p.x:.2f}, {p.y:.2f})'
         return None, message or f'no {color} {"/".join(queries)}'.strip()
+
+    def remember(self, obj):
+        p = self.to_odom(obj)
+        if p is not None:
+            self.sighting = (p, time.time())
+
+    def look_at_sighting(self, queries, color):
+        """前に見つけた場所へカメラを向け、その近くに同じ条件の物があれば返す。無ければNone。"""
+        if self.sighting is None or self.gaze is None or time.time() - self.sighting[1] > self.sighting_max_age:
+            return None
+        target = self.sighting[0]
+        pose = dict(zip(self.arm_joints, self.gaze_pose))
+        q, offset = self.gaze.solve(self.to_base(target, self.current_pose()), pose, pose,
+                                    limits={'wrist_flex': tuple(self.gaze_wrist_limits)})
+        # 付け根と手首だけでは写せない向き(車体の後ろ等)なら見回しに任せる。
+        if np.max(np.abs(offset)) > self.sighting_max_offset:
+            return None
+        try:
+            self.arm_to([q[n] for n in self.arm_joints])
+        except Failed as e:
+            self.get_logger().warn(f'cannot look at the last sighting: {e}')
+            return None
+        time.sleep(self.settle_time)
+        objects, _ = find_objects(self.find_client, queries, color, self.find_attempts, self.search_min_score)
+        obj = self.nearest(objects, target)
+        if obj is None:
+            self.get_logger().info(f'not at the last sighting ({len(objects)} matching objects elsewhere)')
+        return obj
+
+    def nearest(self, objects, target):
+        """odom上のtargetからtrack_gate以内で一番近い検出。無ければNone。"""
+        near = [(math.dist(p[:2], target[:2]), o) for o in objects if (p := self.to_odom(o)) is not None]
+        near = [(d, o) for d, o in near if d <= self.track_gate]
+        return min(near, key=lambda x: x[0])[1] if near else None
 
     # --- 近づく ---
 
@@ -194,23 +224,33 @@ class BehaviorServer(Node):
         try:
             fb = lambda stage, remaining=0.0: ApproachObject.Feedback(stage=stage, remaining=remaining)  # noqa: E731
             goal_handle.publish_feedback(fb('looking'))
-            obj, message = self.search(goal_handle, req.queries, req.color, False, lambda s, _: fb('looking'))
+            obj, message = self.look_at_sighting(req.queries, req.color), ''
+            if obj is None:
+                obj, message = self.search(goal_handle, req.queries, req.color, lambda s, _: fb('looking'))
+            else:
+                self.get_logger().info('found the object again at the last sighting')
             target = self.to_odom(obj) if obj is not None else None
             if target is None:
                 raise Failed(ApproachObject.Result.NOT_FOUND, message or 'cannot locate the object in odom')
             tracker = Tracker(self, req.queries, req.color, target)
             self.drive_to(goal_handle, tracker, standoff, fb)
             tracker.stop()
-            # 止まった位置から近くを見て測り直し、呼び出し側(つかむ等)が使える位置を返す。
-            self.arm_to(self.near_view)
+            lx, ly, _ = self.to_base(tracker.target, self.current_pose())
+            self.get_logger().info(f'stopped with the object estimated at ({lx:.3f}, {ly:.3f}) from base_link')
+            # 止まった位置で測り直し、呼び出し側(つかむ等)が使える位置を返す。カメラは物体へ向いたままにする
+            # (姿勢を変えると写り方と明るさが変わり、見えていた物を見落とすことがある)。
             time.sleep(self.settle_time)
             objects, message = find_objects(self.find_client, req.queries, req.color, self.find_attempts,
                                             self.search_min_score)
-            if not objects:
-                raise Failed(ApproachObject.Result.NOT_FOUND, f'lost after approaching: {message}')
-            result.error_code, result.object = ApproachObject.Result.SUCCESS, objects[0]
-            p = objects[0].position.point
-            result.message = f'{objects[0].label} is at ({p.x:.2f}, {p.y:.2f})'
+            # 確信度の高い順では、近くの別の物を返すことがあるため、追ってきた物に一番近いものを返す。
+            obj = self.nearest(objects, tracker.target)
+            if obj is None:
+                raise Failed(ApproachObject.Result.NOT_FOUND,
+                             f'lost after approaching: {message or "only other objects are in view"}')
+            self.remember(obj)
+            result.error_code, result.object = ApproachObject.Result.SUCCESS, obj
+            p = obj.position.point
+            result.message = f'{obj.label} is at ({p.x:.2f}, {p.y:.2f})'
             goal_handle.succeed()
         except Failed as e:
             result.error_code, result.message = e.code, str(e)
@@ -235,7 +275,7 @@ class BehaviorServer(Node):
         self.arm_to([gaze[n] for n in self.arm_joints])
         tracker.forget_until_now()
         start, traveled, deadline = self.current_pose(), 0.0, time.time() + self.approach_timeout
-        previous, next_gaze = start, 0.0
+        previous, next_gaze, phase = start, 0.0, None
         while True:
             self.check_cancel(goal_handle)
             if time.time() > deadline:
@@ -258,9 +298,19 @@ class BehaviorServer(Node):
             if time.time() - tracker.last_seen > self.lost_timeout:
                 raise Failed(ApproachObject.Result.NOT_FOUND, 'lost the object while approaching')
 
-            if abs(remaining) <= self.distance_tolerance and abs(heading) <= self.yaw_tolerance:
+            arrived = abs(remaining) <= self.distance_tolerance and abs(heading) <= self.yaw_tolerance
+            turning = abs(heading) > self.turn_in_place_angle or abs(remaining) <= self.distance_tolerance
+            now = 'arrived' if arrived else 'turning' if turning else 'driving'
+            if now != phase:
+                # その場の回転と前進が切り替わると車体が止まって見えるため、切り替わりの理由が分かるよう記録する。
+                self.get_logger().info(
+                    f'{now}: object at ({lx:.3f}, {ly:.3f}) from base_link, remaining {remaining:.3f} m, '
+                    f'heading {math.degrees(heading):.1f} deg, traveled {traveled:.2f} m, '
+                    f'last seen {time.time() - tracker.last_seen:.1f} s ago')
+                phase = now
+            if arrived:
                 break
-            if abs(heading) > self.turn_in_place_angle or abs(remaining) <= self.distance_tolerance:
+            if turning:
                 # 遅すぎる指令ではモーターが回らないため、最低速度を守る(値の根拠は設定ファイル)。
                 speed = min(self.turn_speed, max(self.min_turn_speed, 1.5 * abs(heading)))
                 self.publish(0.0, math.copysign(speed, heading))
@@ -311,23 +361,6 @@ class BehaviorServer(Node):
         if code != MoveItErrorCodes.SUCCESS:
             raise Failed(SearchObject.Result.FAILED, f'arm move failed (MoveIt error code {code})')
 
-    def rotate(self, goal_handle, angle):
-        target = wrap(self.current_pose()[2] + angle)
-        # 実際の速さは指令の半分ほどになるため、時間には余裕を持たせる。
-        deadline = time.time() + abs(angle) / self.min_turn_speed * 4.0 + 5.0
-        while True:
-            self.check_cancel(goal_handle)
-            error = wrap(target - self.current_pose()[2])
-            if abs(error) <= self.yaw_tolerance:
-                break
-            if time.time() > deadline:
-                raise Failed(SearchObject.Result.FAILED, f'rotation timed out ({math.degrees(error):.0f} deg left)')
-            speed = min(self.turn_speed, max(self.min_turn_speed, 1.5 * abs(error)))
-            self.publish(0.0, math.copysign(speed, error))
-            time.sleep(0.05)
-        self.stop()
-        time.sleep(0.5)
-
     def obstacle_ahead(self):
         # LiDARの高さ(天板の上)より低い物は見えないので、壁や家具など背の高い物だけ止まれる。
         scan = self.scan
@@ -366,6 +399,7 @@ class Tracker:
     def __init__(self, node, queries, color, target):
         self.node, self.queries, self.color = node, queries, color
         self.target = target
+        self.pending = None
         self.last_seen = time.time()
         self.running = True
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -387,7 +421,17 @@ class Tracker:
                     if best is None or math.dist(p[:2], self.target[:2]) < math.dist(best[:2], self.target[:2]):
                         best = p
             if best is not None:
-                self.target = best
+                step = math.dist(best[:2], self.target[:2])
+                # 置かれた物は動かないため、大きく飛んだ検出は深度の誤り等とみなし、続けて同じ所に出たときだけ信じる
+                # (1回の誤った検出で目標が奥へずれると、止まる手前で走り出して物を蹴る)。
+                if step > self.node.track_max_step and (
+                        self.pending is None or math.dist(best[:2], self.pending[:2]) > self.node.track_max_step):
+                    self.node.get_logger().info(f'tracking: ignored a jump of {step:.3f} m in odom')
+                    self.pending = best
+                    best = None
+            if best is not None:
+                self.node.get_logger().info(f'tracking: moved {step:.3f} m in odom', throttle_duration_sec=1.0)
+                self.target, self.pending = best, None
                 self.last_seen = time.time()
             else:
                 self.node.get_logger().info(

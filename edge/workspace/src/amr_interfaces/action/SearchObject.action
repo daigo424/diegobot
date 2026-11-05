@@ -1,8 +1,6 @@
 # 探す対象。PickObjectと同じく英語の短い名詞句(言い換えを並べてよい)と、色(空なら問わない)。
 string[] queries
 string color
-# アームを左右に振っても見つからなければ、車体をその場で回して後ろ側も探す。
-bool rotate_base
 ---
 uint8 SUCCESS=0
 uint8 NOT_FOUND=1
@@ -13,6 +11,6 @@ string message
 # 見つけた物体。位置は見つけた時点のbase_link基準(その後に車体が動いていなければ使える)。
 DetectedObject object
 ---
-# 今の段階(looking, turning)と、見ている向き(base_linkの前方からの角度[rad]、左が正)
+# 今の段階(looking)と、見ている向き(base_linkの前方からの角度[rad]、左が正)
 string stage
 float32 heading

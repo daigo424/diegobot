@@ -116,12 +116,18 @@ class Manipulator(Node):
         opened = False
         try:
             self.require_ik()
-            self.stage(goal_handle, PickObject, 'looking')
-            self.move_to(dict(zip(self.arm_joints, self.look_joints)))
-            time.sleep(self.settle_time)
-
+            # 近づいた直後はカメラが物へ向いているため、まず姿勢を変えずに探す。姿勢を変えると写り方と明るさが変わり、
+            # 見えていた物を見落とすことがある。届く物が無ければ見下ろす姿勢で探し直す。
             self.stage(goal_handle, PickObject, 'finding')
-            obj, plan = self.choose(goal_handle.request, result)
+            try:
+                obj, plan = self.choose(goal_handle.request, result)
+            except ArmFailed as e:
+                self.get_logger().info(f'not in reach from the current pose ({e}), looking down')
+                self.stage(goal_handle, PickObject, 'looking')
+                self.move_to(dict(zip(self.arm_joints, self.look_joints)))
+                time.sleep(self.settle_time)
+                self.stage(goal_handle, PickObject, 'finding')
+                obj, plan = self.choose(goal_handle.request, result)
 
             self.stage(goal_handle, PickObject, 'opening')
             self.grip(self.gripper_open)

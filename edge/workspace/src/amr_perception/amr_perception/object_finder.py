@@ -13,6 +13,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
+from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformException, TransformListener
 from ultralytics import YOLOE
 from visualization_msgs.msg import Marker, MarkerArray
@@ -21,17 +22,19 @@ import tf2_geometry_msgs  # noqa: F401  PointStampedをBuffer.transformで変換
 # OpenCVのHSVの色相(0〜179)の区間ごとの色名。赤は0付近と179付近にまたがる。
 HUE_NAMES = [(5, 'red'), (18, 'orange'), (33, 'yellow'), (80, 'green'), (95, 'cyan'), (130, 'blue'),
              (150, 'purple'), (170, 'pink'), (180, 'red')]
+# カメラの色味が青寄りで白や灰色の物も薄く青く写るため、はっきり色の付いた画素だけを色名にする。
+MIN_SATURATION = 80
 
 
 def color_name(bgr_pixels):
     if len(bgr_pixels) == 0:
         return ''
-    hsv =cv2.cvtColor(bgr_pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
+    hsv = cv2.cvtColor(bgr_pixels.reshape(-1, 1, 3), cv2.COLOR_BGR2HSV).reshape(-1, 3)
     h, s, v = hsv[:, 0], hsv[:, 1], hsv[:, 2]
     names = np.full(len(hsv), 'gray', dtype=object)
     names[v < 50] = 'black'
-    names[(v >= 50) & (s < 40) & (v > 180)] = 'white'
-    chromatic = (v >= 50) & (s >= 40)
+    names[(v >= 50) & (s < MIN_SATURATION) & (v > 180)] = 'white'
+    chromatic = (v >= 50) & (s >= MIN_SATURATION)
     lower = 0
     for upper, name in HUE_NAMES:
         names[chromatic & (h >= lower) & (h < upper)] = name
@@ -117,7 +120,10 @@ class ObjectFinder(Node):
         pairs = ((c, self.matching_depth(c.header.stamp)) for c in reversed(list(self.colors)))
         color_msg, depth_msg = next(((c, d) for c, d in pairs if d is not None), (None, None))
         if color_msg is None:
-            response.message = 'no depth image matching the color images'
+            stamps = lambda msgs: (f'{len(msgs)} from {Time.from_msg(msgs[0].header.stamp).nanoseconds / 1e9:.2f} '  # noqa: E731
+                                   f'to {Time.from_msg(msgs[-1].header.stamp).nanoseconds / 1e9:.2f}' if msgs else 'none')
+            response.message = (f'no depth image matching the color images (color: {stamps(self.colors)}, '
+                                f'depth: {stamps(self.depths)})')
             return response
         age = self.get_clock().now() - Time.from_msg(color_msg.header.stamp)
         if age > Duration(seconds=self.max_image_age):
@@ -166,6 +172,16 @@ class ObjectFinder(Node):
                         self.project_to_plane(obj.position, point.header, (mu.mean() - cx) / fx, (ms.mean() - cy) / fy)
                 except TransformException as e:
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
+            elif mask.any():
+                # 近くの平らな面は投光の模様が返らず、物全体の深度が抜けることがある。床に置かれた物とみなして位置を出す。
+                ms, mu = np.nonzero(mask)
+                camera = Header(stamp=color_msg.header.stamp, frame_id=info.header.frame_id)
+                obj.position.header = Header(stamp=color_msg.header.stamp, frame_id=self.target_frame)
+                try:
+                    obj.position_valid = self.project_to_plane(obj.position, camera, (mu.mean() - cx) / fx,
+                                                               (ms.mean() - cy) / fy)
+                except TransformException as e:
+                    self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
             response.objects.append(obj)
 
         response.success = True
@@ -174,7 +190,8 @@ class ObjectFinder(Node):
         return response
 
     def project_to_plane(self, position, camera_header, ray_x, ray_y):
-        """カメラから正規化座標(ray_x, ray_y)の向きへ伸ばした視線と、床からflat_object_heightの面との交点へ置き換える。"""
+        """カメラから正規化座標(ray_x, ray_y)の向きへ伸ばした視線と、床からflat_object_heightの面との交点へ置き換える。
+        視線が床へ向かわず交わらなければ置き換えずFalseを返す。"""
         t = self.tf_buffer.lookup_transform(self.target_frame, camera_header.frame_id, camera_header.stamp,
                                             timeout=Duration(seconds=0.2))
         q, o = t.transform.rotation, t.transform.translation
@@ -185,9 +202,10 @@ class ObjectFinder(Node):
         d = rotation @ np.array([ray_x, ray_y, 1.0])
         plane = self.floor_z + self.flat_object_height
         if d[2] >= -1e-6:
-            return
+            return False
         s = (plane - o.z) / d[2]
         position.point.x, position.point.y, position.point.z = o.x + s * d[0], o.y + s * d[1], plane
+        return True
 
     def publish_debug(self, header, result, objects):
         if self.image_pub.get_subscription_count() > 0:
