@@ -87,9 +87,10 @@ class ObjectFinder(Node):
         self.tf_listener = TransformListener(self.tf_buffer, None, spin_thread=True)
 
         self.camera_info = None
-        # カラーと深度は同じ時刻のフレームを組にする。別々に届き、最新のカラーの深度がまだ無いことがあるため両方溜めておく。
-        self.colors = deque(maxlen=10)
-        self.depths = deque(maxlen=10)
+        # カラーと深度は同じ時刻のフレームを組にする。別々に届き、Wi-Fiが混むと片方が1秒近く遅れることがあるため、
+        # その遅れより長い分(毎秒約15枚で約2秒)を両方溜めておく。
+        self.colors = deque(maxlen=30)
+        self.depths = deque(maxlen=30)
         self.create_subscription(CompressedImage, 'color/image/compressed', self.on_color, qos_profile_sensor_data)
         self.create_subscription(CompressedImage, 'depth/image/compressed', self.on_depth, qos_profile_sensor_data)
         self.create_subscription(CameraInfo, 'color/camera_info', self.on_camera_info, qos_profile_sensor_data)
