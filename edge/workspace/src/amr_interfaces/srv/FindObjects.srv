@@ -2,7 +2,11 @@
 string[] queries
 # これ以上の確信度の物だけ返す。0ならobject_finderの既定値(conf)。遠くの小さな物を探すときは下げる。
 float32 min_score
+# trueなら各物体のmaskと、検出に使ったカラー画像(image)も返す。見分けるために切り出す側が、同じ画像から切り出せるようにする。
+bool want_mask
 ---
 bool success
 string message
 DetectedObject[] objects
+# want_maskのときだけ。検出に使ったカラー画像(圧縮のまま)。
+sensor_msgs/CompressedImage image

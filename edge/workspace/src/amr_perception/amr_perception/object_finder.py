@@ -43,6 +43,12 @@ def color_name(bgr_pixels):
     return str(values[np.argmax(counts)])
 
 
+def mask_image(header, mask):
+    """真偽値のマスクを、物の画素が255のmono8画像にする。"""
+    return Image(header=header, height=mask.shape[0], width=mask.shape[1], encoding='mono8', step=mask.shape[1],
+                 data=(mask.astype(np.uint8) * 255).tobytes())
+
+
 def decode_depth(msg):
     depth = cv2.imdecode(np.frombuffer(msg.data, np.uint8), cv2.IMREAD_UNCHANGED)
     if depth is None:
@@ -151,6 +157,9 @@ class ObjectFinder(Node):
             obj = DetectedObject(label=result.names[int(cls)], score=conf, color=color_name(frame[mask]))
             obj.bbox.center.position.x, obj.bbox.center.position.y = box[0], box[1]
             obj.bbox.size_x, obj.bbox.size_y = box[2], box[3]
+            obj.crop_px = float(min(box[2], box[3]))
+            if request.want_mask:
+                obj.mask = mask_image(color_msg.header, mask)
 
             valid = mask & (depth > 0) & np.isfinite(depth)
             if valid.any():
@@ -173,7 +182,7 @@ class ObjectFinder(Node):
                 except TransformException as e:
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
             elif mask.any():
-                # 近くの平らな面は投光の模様が返らず、物全体の深度が抜けることがある。床に置かれた物とみなして位置を出す。
+                # カメラが深度の抜ける状態になると物全体に深度が無いことがある。床に置かれた物とみなして位置を出す。
                 ms, mu = np.nonzero(mask)
                 camera = Header(stamp=color_msg.header.stamp, frame_id=info.header.frame_id)
                 obj.position.header = Header(stamp=color_msg.header.stamp, frame_id=self.target_frame)
@@ -184,6 +193,8 @@ class ObjectFinder(Node):
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
             response.objects.append(obj)
 
+        if request.want_mask:
+            response.image = color_msg
         response.success = True
         response.message = f'found {len(response.objects)} object(s)'
         self.publish_debug(color_msg.header, result, response.objects)

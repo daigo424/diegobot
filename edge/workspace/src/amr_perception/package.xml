@@ -23,6 +23,8 @@
   <exec_depend>compressed_depth_image_transport</exec_depend>
   <exec_depend>depth_image_proc</exec_depend>
 
+  <test_depend>python3-pytest</test_depend>
+
   <export>
     <build_type>ament_python</build_type>
   </export>

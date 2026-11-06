@@ -15,3 +15,8 @@ float32 height
 
 # マスク内で最も多い色の名前(red, orange, yellow, green, cyan, blue, purple, pink, white, gray, black)
 string color
+
+# 外接矩形の短辺[px]。見分けに足りる大きさで写っているかの判定に使う。
+float32 crop_px
+# FindObjectsのwant_maskのときだけ。カラー画像と同じ大きさのmono8で、物の画素が255。
+sensor_msgs/Image mask
