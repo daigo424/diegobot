@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -37,9 +38,12 @@ def generate_launch_description():
         composable_node_descriptions=[point_cloud_xyzrgb],
     )
 
+    # 全フレームを推論し続けるためGPUを大きく使う。物体検索(object_finder)には不要なので、比べるときだけ起動する。
+    detector = DeclareLaunchArgument('detector', default_value='false')
     # TensorRTエンジン(export_engineで作った.engine)もここで指定する。
     model = DeclareLaunchArgument('model', default_value='yoloe-26s-seg-pf.pt')
     object_detector = Node(
+        condition=IfCondition(LaunchConfiguration('detector')),
         package='amr_perception',
         executable='object_detector',
         output='both',
@@ -58,4 +62,4 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([model, container, object_detector, object_finder])
+    return LaunchDescription([detector, model, container, object_detector, object_finder])
