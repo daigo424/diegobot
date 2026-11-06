@@ -62,4 +62,11 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([detector, model, container, object_detector, object_finder])
+    # 名前で指定された物を、object_finderの候補からVLMに選ばせる。VLMのAPIキーは環境変数ANTHROPIC_API_KEYで渡す。
+    object_resolver = Node(
+        package='amr_perception',
+        executable='object_resolver',
+        output='both',
+    )
+
+    return LaunchDescription([detector, model, container, object_detector, object_finder, object_resolver])

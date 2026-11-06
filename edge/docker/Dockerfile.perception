@@ -35,6 +35,8 @@ RUN /opt/perception-venv/bin/pip install --no-cache-dir \
       onnxslim==0.1.98 \
       onnxruntime==1.31.0 \
       tensorrt-cu13==10.16.1.11
+# object_resolverが候補の見分けをClaude(VLM)に頼むのに使う。
+RUN /opt/perception-venv/bin/pip install --no-cache-dir anthropic==1.17.0
 # colconが生成するノードの起動スクリプトはシステムの/usr/bin/python3を直接使うため、
 # venvを有効化するのではなく、venvのパッケージをシステムのPythonから見えるようにする。
 ENV PYTHONPATH=/opt/perception-venv/lib/python3.12/site-packages

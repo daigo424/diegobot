@@ -10,6 +10,7 @@ find_package(sensor_msgs REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   msg/DetectedObject.msg
   srv/FindObjects.srv
+  srv/ResolveObject.srv
   action/PickObject.action
   action/PlaceObject.action
   action/SearchObject.action

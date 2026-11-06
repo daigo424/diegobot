@@ -23,6 +23,7 @@ setup(
         'console_scripts': [
             'object_detector = amr_perception.object_detector:main',
             'object_finder = amr_perception.object_finder:main',
+            'object_resolver = amr_perception.object_resolver:main',
             'export_engine = amr_perception.export_engine:main',
         ],
     },

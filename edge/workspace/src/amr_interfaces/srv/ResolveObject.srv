@@ -1,0 +1,25 @@
+# 見分ける対象の名前(ユーザーの言葉のまま。例: "ハチワレ")。候補はobject_finderで出し、どれが対象かをVLMに選ばせる。
+string target_name
+# 候補を出すための広いカテゴリ語(例: ["figurine", "toy figure"])。空ならobject_resolverの既定値を使う。
+string[] queries
+# 色で候補を絞る(object_resolverのuse_colorがtrueのときだけ。見分けをVLMだけで測るため既定では使わない)。
+string color
+# 既に対象ではないと分かった候補の位置(odom)。近くの候補は出さない。
+geometry_msgs/Point[] exclude
+---
+uint8 SUCCESS=0
+# 候補が1つも無い
+uint8 NOT_FOUND=1
+# 候補はあるが、どれも対象ではない
+uint8 NO_MATCH=2
+# VLMが見分けられなかった
+uint8 AMBIGUOUS=3
+# 候補はあるが、見分けるには小さく写っている(近づく必要がある)
+uint8 TOO_FAR=4
+uint8 FAILED=5
+uint8 error_code
+string message
+# 対象と判定した物体
+DetectedObject object
+# NO_MATCH・TOO_FARのとき、まだ確かめていない候補(近づく先の候補)
+DetectedObject[] candidates
