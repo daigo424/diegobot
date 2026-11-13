@@ -75,6 +75,9 @@ class ObjectFinder(Node):
         self.flat_threshold = self.declare_parameter('flat_threshold', 0.01).value
         # そのときは、マスクの重心を通る視線と床からこの高さの水平面との交点を位置にする。
         self.flat_object_height = self.declare_parameter('flat_object_height', 0.015).value
+        # 深度の最短距離より近い部分は値が抜け、残った縁や背景の深度で距離と大きさを誤る。マスクのうち深度のある画素が
+        # この割合未満なら、深度が無いときと同じく床に置かれた物とみなし、width・heightは出さない。
+        self.min_depth_ratio = self.declare_parameter('min_depth_ratio', 0.3).value
 
         os.makedirs(models_dir, exist_ok=True)
         os.chdir(models_dir)
@@ -163,7 +166,7 @@ class ObjectFinder(Node):
                 obj.mask = mask_image(color_msg.header, mask)
 
             valid = mask & (depth > 0) & np.isfinite(depth)
-            if valid.any():
+            if valid.any() and valid.sum() >= self.min_depth_ratio * mask.sum():
                 vs, us = np.nonzero(valid)
                 z = float(np.median(depth[valid]))
                 point = PointStamped()
@@ -183,7 +186,7 @@ class ObjectFinder(Node):
                 except TransformException as e:
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
             elif mask.any():
-                # カメラが深度の抜ける状態になると物全体に深度が無いことがある。床に置かれた物とみなして位置を出す。
+                # 近すぎる、またはカメラが深度の抜ける状態になると、物の深度がほとんど無いことがある。
                 ms, mu = np.nonzero(mask)
                 camera = Header(stamp=color_msg.header.stamp, frame_id=info.header.frame_id)
                 obj.position.header = Header(stamp=color_msg.header.stamp, frame_id=self.target_frame)

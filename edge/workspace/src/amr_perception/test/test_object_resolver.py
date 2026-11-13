@@ -98,6 +98,13 @@ def test_large_objects_and_no_candidates(resolver):
     assert res.error_code == ResolveObject.Response.NOT_FOUND
 
 
+def test_size_is_not_checked_without_depth(resolver):
+    node, answers = resolver
+    answers.append('1')
+    res = run(node, [candidate(200, 240, 150, width=0.0)])
+    assert res.error_code == ResolveObject.Response.SUCCESS
+
+
 def test_verification_can_reject_the_choice(resolver):
     node, answers = resolver
     node.set_parameters([rclpy.parameter.Parameter('verify', value=True)])
