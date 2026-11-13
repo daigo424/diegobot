@@ -33,13 +33,14 @@ class DepthWatchdog(Node):
         self.bad_since = None
         self.next_check = 0.0
         self.failed = False
-        self.last_frame = self.started
+        self.last_frame = None
         self.create_subscription(Image, 'depth/image_raw', self.on_depth, qos_profile_sensor_data)
         self.create_timer(self.check_period, self.check_silence)
 
     def check_silence(self):
         now = time.monotonic()
-        if now - self.started < self.grace or now - self.last_frame < self.max_silence:
+        # 起動直後はカメラが画像を出し始めるまでの時間がまちまちなため、一度届いてから途切れたときだけ見る。
+        if self.last_frame is None or now - self.last_frame < self.max_silence:
             return
         self.get_logger().error(f'no depth image for {now - self.last_frame:.0f} s, reopening the camera')
         self.failed = True
