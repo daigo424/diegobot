@@ -128,3 +128,68 @@ class Gaze(KinematicChain):
         x0 = np.clip([seed[n] for n in self.moving_joints], lo, hi)
         sol = least_squares(offset, x0, bounds=(lo, hi))
         return dict(fixed, **dict(zip(self.moving_joints, sol.x))), offset(sol.x)
+
+
+class ViewPose(KinematicChain):
+    """物をなるべく横に近い角度から見る、カメラ(光学座標系)の関節角度を求める。
+
+    見下ろす角度を浅い方から順に試し、物の全体が画像に収まり、カメラと道具の先が床から離れている最初の解を返す。
+    """
+
+    def __init__(self, urdf, base, camera, tool, fixed_joints):
+        super().__init__(urdf, base, camera)
+        self.tool = KinematicChain(urdf, base, tool)
+        self.fixed = dict(fixed_joints)
+        self.moving_joints = [n for n in self.joint_names if n not in self.fixed]
+
+    def solve(self, bottom, height, radius, seeds, image_size, focal, angles, distance=0.3,
+              min_distance=0.2, max_distance=0.5, floor_z=0.0, clearance=0.03, fill=0.8, margin=0.02, limits=None):
+        """床(floor_z)に置かれた、底面の中心bottom・高さheight・半径radiusの物を見る関節角度と見下ろす角度を返す。
+        解けなければ(None, None)。image_sizeは(幅, 高さ)[px]、focalは(fx, fy)[px]、anglesは試す見下ろす角度[rad]。
+        limitsは関節名→(下限, 上限)で、URDFの範囲より狭めたい関節(腕を前へ伸ばしすぎると肩が支えきれない等)に使う。"""
+        bottom = np.asarray(bottom, dtype=float)
+        center = bottom + [0.0, 0.0, height / 2.0]
+        limits = limits or {}
+        lo = np.array([max(self.lower[n] + margin, limits.get(n, (-np.inf, np.inf))[0]) for n in self.moving_joints])
+        hi = np.array([min(self.upper[n] - margin, limits.get(n, (-np.inf, np.inf))[1]) for n in self.moving_joints])
+        # 物を外接する円柱の上下の縁の点。全部が画像の枠の内側(fillの割合)に写れば、物の全体が収まる。
+        ring = [np.array([np.cos(a), np.sin(a), 0.0]) * radius for a in np.linspace(0, 2 * np.pi, 8, endpoint=False)]
+        corners = [bottom + r + [0.0, 0.0, z] for r in ring for z in (0.0, height)]
+        half = np.array(image_size, dtype=float) * fill / 2.0
+
+        def joints(x):
+            return dict(self.fixed, **dict(zip(self.moving_joints, x)))
+
+        for angle in angles:
+            def residual(x):
+                m = self.fk(joints(x))
+                p = np.linalg.inv(m) @ np.append(center, 1.0)
+                v = center - m[:3, 3]
+                down = np.arctan2(-v[2], np.hypot(v[0], v[1]))
+                return np.array([p[0] / max(p[2], 0.05), p[1] / max(p[2], 0.05),
+                                 down - angle, 0.3 * (np.linalg.norm(v) - distance)])
+
+            for seed in seeds:
+                x0 = np.clip([seed[n] for n in self.moving_joints], lo, hi)
+                sol = least_squares(residual, x0, bounds=(lo, hi))
+                q = joints(sol.x)
+                if self._usable(q, center, corners, half, focal, angle, min_distance, max_distance,
+                                floor_z + clearance):
+                    return q, angle
+        return None, None
+
+    def _usable(self, q, center, corners, half, focal, angle, min_distance, max_distance, min_z):
+        m = self.fk(q)
+        v = center - m[:3, 3]
+        if not min_distance <= np.linalg.norm(v) <= max_distance:
+            return False
+        if abs(np.arctan2(-v[2], np.hypot(v[0], v[1])) - angle) > np.radians(5):
+            return False
+        if m[2, 3] < min_z or self.tool.fk(q)[2, 3] < min_z:
+            return False
+        inv = np.linalg.inv(m)
+        for c in corners:
+            p = inv @ np.append(c, 1.0)
+            if p[2] <= 0.0 or abs(focal[0] * p[0] / p[2]) > half[0] or abs(focal[1] * p[1] / p[2]) > half[1]:
+                return False
+        return True

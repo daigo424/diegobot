@@ -50,3 +50,28 @@ def test_respects_joint_limits(ik):
     q = ik.solve((0.15, 0.0, 0.05), 0.0, SEEDS)
     for name in ik.solved_joints:
         assert ik.lower[name] <= q[name] <= ik.upper[name]
+
+
+def test_view_pose_looks_at_the_whole_object_from_the_side():
+    from amr_manipulation.top_down_ik import ViewPose
+    view = ViewPose(ARM, 'base', 'tip', 'tip', {'roll': 0.0})
+    seeds = [{'pan': 0.0, 'lift': 0.5, 'elbow': 1.0, 'wrist': 0.5}, {'pan': 0.0, 'lift': 1.2, 'elbow': -0.5, 'wrist': 0.3}]
+    angles = np.radians([10, 20, 30, 40, 50, 60])
+    q, angle = view.solve((0.3, 0.05, 0.0), 0.06, 0.02, seeds, (640, 480), (600.0, 600.0), angles,
+                          distance=0.2, min_distance=0.1, max_distance=0.4)
+    assert q is not None
+    m = view.fk(q)
+    center = np.array([0.3, 0.05, 0.03, 1.0])
+    p = np.linalg.inv(m) @ center
+    assert abs(p[0] / p[2]) < 0.02 and abs(p[1] / p[2]) < 0.02
+    v = center[:3] - m[:3, 3]
+    assert abs(np.arctan2(-v[2], np.hypot(v[0], v[1])) - angle) < np.radians(5)
+    assert m[2, 3] > 0.03
+
+
+def test_view_pose_gives_up_when_the_object_cannot_fit():
+    from amr_manipulation.top_down_ik import ViewPose
+    view = ViewPose(ARM, 'base', 'tip', 'tip', {'roll': 0.0})
+    q, angle = view.solve((0.3, 0.0, 0.0), 0.5, 0.2, [{'pan': 0.0, 'lift': 0.5, 'elbow': 1.0, 'wrist': 0.5}],
+                          (640, 480), (600.0, 600.0), np.radians([10, 30]), distance=0.2, max_distance=0.3)
+    assert q is None and angle is None
