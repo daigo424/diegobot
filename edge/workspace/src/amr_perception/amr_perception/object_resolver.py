@@ -125,7 +125,7 @@ class ObjectResolver(Node):
         # これより大きい物は対象(手で持てる大きさのフィギュア)ではないとみなす。
         self.max_size = p('max_size', 0.15).value
         # これより小さく写っている候補はVLMに見せない(見分けられないため)。
-        self.min_crop_px = p('min_crop_px', 100.0).value
+        self.min_crop_px = p('min_crop_px', 40.0).value
         self.exclude_radius = p('exclude_radius', 0.08).value
         self.use_color = p('use_color', False).value
         self.tile_px = p('tile_px', 336).value

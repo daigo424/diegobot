@@ -73,14 +73,14 @@ def test_picks_the_numbered_candidate(resolver):
 def test_no_match_returns_only_unseen_candidates(resolver):
     node, answers = resolver
     answers.append('0')
-    res = run(node, [candidate(200, 240, 150), candidate(500, 100, 40)])
+    res = run(node, [candidate(200, 240, 150), candidate(500, 100, 30)])
     assert res.error_code == ResolveObject.Response.NO_MATCH
     assert [o.bbox.center.position.x for o in res.candidates] == [500]
 
 
 def test_too_small_candidates_are_not_shown_to_the_model(resolver):
     node, answers = resolver
-    res = run(node, [candidate(200, 240, 60)])
+    res = run(node, [candidate(200, 240, 30)])
     assert res.error_code == ResolveObject.Response.TOO_FAR and len(res.candidates) == 1
     assert answers == []
 
