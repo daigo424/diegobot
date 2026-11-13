@@ -175,12 +175,15 @@ vendor-import:
 	$(EXEC) $(ROS2_SERVICE) bash -c "cd $(ROS2_WS) && vcs import src < vendor.repos"
 
 launch-urdf-display:
-	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/my_robot_description/urdf/$(FILENAME)"
+	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/amr_description/urdf/$(FILENAME)"
 
 rqt-graph:
 	$(MAKE) colcon CMD_RUN="rqt_graph"
-launch-my-robot-description-display:
-	$(MAKE) colcon CMD_RUN="ros2 launch my_robot_description display.launch.xml"
+# ロボットのモデルとTFを、スライダーで関節を動かしながらRVizで見る。偽の/joint_statesと/tfを出すため、
+# 実機の通信に混ざらないよう別のROS_DOMAIN_IDで起動する。
+MODEL_VIEW_DOMAIN_ID ?= 99
+view-model:
+	$(EXEC) -e ROS_DOMAIN_ID=$(MODEL_VIEW_DOMAIN_ID) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_description display.launch.xml"
 
 use-controller:
 	$(MAKE) colcon CMD_RUN="ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel -p stamped:=true"
