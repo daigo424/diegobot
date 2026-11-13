@@ -20,3 +20,9 @@ string color
 float32 crop_px
 # FindObjectsのwant_maskのときだけ。カラー画像と同じ大きさのmono8で、物の画素が255。
 sensor_msgs/Image mask
+
+# FindObjectsのwant_obbのときだけ。床に置かれた物の外接直方体で、obb_poseのx軸が長辺、extentsは(長辺, 短辺, 床からの高さ)[m]。
+# 見えている面の点から求めるため視線方向の奥行きは短く出る。向きが定まらなければobb_validはfalseで、向きは回さない。
+geometry_msgs/PoseStamped obb_pose
+geometry_msgs/Vector3 obb_extents
+bool obb_valid

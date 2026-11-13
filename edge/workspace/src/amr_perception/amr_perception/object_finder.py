@@ -6,7 +6,7 @@ import numpy as np
 import rclpy
 from amr_interfaces.msg import DetectedObject
 from amr_interfaces.srv import FindObjects
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PointStamped, PoseStamped
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
@@ -18,6 +18,8 @@ from tf2_ros import Buffer, TransformException, TransformListener
 from ultralytics import YOLOE
 from visualization_msgs.msg import Marker, MarkerArray
 import tf2_geometry_msgs  # noqa: F401  PointStampedをBuffer.transformで変換できるよう登録する
+
+from amr_perception.obb import back_project, erode_mask, fit_obb, remove_outliers, remove_plane
 
 # OpenCVのHSVの色相(0〜179)の区間ごとの色名。赤は0付近と179付近にまたがる。
 HUE_NAMES = [(5, 'red'), (18, 'orange'), (33, 'yellow'), (80, 'green'), (95, 'cyan'), (130, 'blue'),
@@ -195,6 +197,8 @@ class ObjectFinder(Node):
                                                                (ms.mean() - cy) / fy)
                 except TransformException as e:
                     self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
+            if request.want_obb and obj.width > 0.0:
+                self.fill_obb(obj, mask, depth, (fx, fy, cx, cy), color_msg.header.stamp, info.header.frame_id)
             response.objects.append(obj)
 
         if request.want_mask:
@@ -204,22 +208,43 @@ class ObjectFinder(Node):
         self.publish_debug(color_msg.header, result, response.objects)
         return response
 
-    def project_to_plane(self, position, camera_header, ray_x, ray_y):
-        """カメラから正規化座標(ray_x, ray_y)の向きへ伸ばした視線と、床からflat_object_heightの面との交点へ置き換える。
-        視線が床へ向かわず交わらなければ置き換えずFalseを返す。"""
-        t = self.tf_buffer.lookup_transform(self.target_frame, camera_header.frame_id, camera_header.stamp,
-                                            timeout=Duration(seconds=0.2))
+    def fill_obb(self, obj, mask, depth, intrinsics, stamp, camera_frame):
+        try:
+            rotation, origin = self.camera_pose(camera_frame, stamp)
+        except TransformException as e:
+            self.get_logger().warn(f'cannot transform to {self.target_frame}: {e}')
+            return
+        points = back_project(erode_mask(mask, obj.crop_px), depth, *intrinsics) @ rotation.T + origin
+        points, _ = remove_plane(points, self.floor_z)
+        center, yaw, extents, obj.obb_valid = fit_obb(remove_outliers(points), self.floor_z)
+        if center is None:
+            return
+        obj.obb_pose = PoseStamped(header=Header(stamp=stamp, frame_id=self.target_frame))
+        p = obj.obb_pose.pose
+        p.position.x, p.position.y, p.position.z = (float(v) for v in center)
+        p.orientation.z, p.orientation.w = float(np.sin(yaw / 2.0)), float(np.cos(yaw / 2.0))
+        obj.obb_extents.x, obj.obb_extents.y, obj.obb_extents.z = (float(v) for v in extents)
+
+    def camera_pose(self, camera_frame, stamp):
+        """target_frameから見たカメラの回転行列と位置。"""
+        t = self.tf_buffer.lookup_transform(self.target_frame, camera_frame, stamp, timeout=Duration(seconds=0.2))
         q, o = t.transform.rotation, t.transform.translation
         x, y, z, w = q.x, q.y, q.z, q.w
         rotation = np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
                              [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
                              [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)]])
+        return rotation, np.array([o.x, o.y, o.z])
+
+    def project_to_plane(self, position, camera_header, ray_x, ray_y):
+        """カメラから正規化座標(ray_x, ray_y)の向きへ伸ばした視線と、床からflat_object_heightの面との交点へ置き換える。
+        視線が床へ向かわず交わらなければ置き換えずFalseを返す。"""
+        rotation, o = self.camera_pose(camera_header.frame_id, camera_header.stamp)
         d = rotation @ np.array([ray_x, ray_y, 1.0])
         plane = self.floor_z + self.flat_object_height
         if d[2] >= -1e-6:
             return False
-        s = (plane - o.z) / d[2]
-        position.point.x, position.point.y, position.point.z = o.x + s * d[0], o.y + s * d[1], plane
+        s = (plane - o[2]) / d[2]
+        position.point.x, position.point.y, position.point.z = o[0] + s * d[0], o[1] + s * d[1], plane
         return True
 
     def publish_debug(self, header, result, objects):
