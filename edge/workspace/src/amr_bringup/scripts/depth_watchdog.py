@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""深度画像のうち値のある画素の割合を見張り、低いままなら終了して、launchごとカメラを開き直させる。
+"""深度画像のうち値のある画素の割合を見張り、低いままか画像が届かなくなったら終了して、launchごとカメラを開き直させる。
 
 カメラが近くの物を見ている間は深度が抜けるのが正常なため、カメラが高い位置(床を離れて見下ろす待機・探す姿勢)にあるときだけ判定する。"""
 import sys
@@ -22,6 +22,7 @@ class DepthWatchdog(Node):
         # 開き直した直後は、深度が揃うまで十数秒かかる。
         self.grace = self.declare_parameter('grace', 30.0).value
         self.check_period = self.declare_parameter('check_period', 1.0).value
+        self.max_silence = self.declare_parameter('max_silence', 10.0).value
         self.base_frame = self.declare_parameter('base_frame', 'base_link').value
         self.camera_frame = self.declare_parameter('camera_frame', 'camera_camera_link_0').value
         # これより低いとカメラが近くの物を見ていることがあり、深度の抜けを異常とみなさない(待機の姿勢では約0.3m)。
@@ -32,10 +33,20 @@ class DepthWatchdog(Node):
         self.bad_since = None
         self.next_check = 0.0
         self.failed = False
+        self.last_frame = self.started
         self.create_subscription(Image, 'depth/image_raw', self.on_depth, qos_profile_sensor_data)
+        self.create_timer(self.check_period, self.check_silence)
+
+    def check_silence(self):
+        now = time.monotonic()
+        if now - self.started < self.grace or now - self.last_frame < self.max_silence:
+            return
+        self.get_logger().error(f'no depth image for {now - self.last_frame:.0f} s, reopening the camera')
+        self.failed = True
 
     def on_depth(self, msg):
         now = time.monotonic()
+        self.last_frame = now
         if now < self.next_check or now - self.started < self.grace:
             return
         self.next_check = now + self.check_period
