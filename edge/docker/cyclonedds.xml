@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain Id="any">
+    <Internal>
+      <!-- 受信バッファが小さいとカメラ画像の受信があふれて丸ごと落ちる。ホストのnet.core.rmem_maxがこれ以上であること。 -->
+      <SocketReceiveBufferSize min="10MB"/>
+    </Internal>
+  </Domain>
+</CycloneDDS>

@@ -84,10 +84,12 @@ echo "==> [6/9] systemdへ登録・有効化"
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}"
 
-echo "==> [7/9] USBデバイスのudevルールをインストール"
+echo "==> [7/9] USBデバイスのudevルールとカーネルのネットワーク設定をインストール"
 install -m 0644 "${SCRIPT_DIR}"/udev/*.rules /etc/udev/rules.d/
 udevadm control --reload-rules
 udevadm trigger
+install -m 0644 "${SCRIPT_DIR}"/sysctl/*.conf /etc/sysctl.d/
+sysctl --system >/dev/null
 
 echo "==> [8/9] 起動時にコンテナを自動起動するsystemdサービスを登録"
 # rootで動かすとbind mount先に作られるファイルがroot所有になるため、ログインユーザーで動かす。

@@ -124,3 +124,6 @@ RUN groupmod -n app -g ${USER_GID} ubuntu && \
     chown -R app:app /home/app /workspace
 
 USER app
+
+COPY cyclonedds.xml /etc/cyclonedds/cyclonedds.xml
+ENV CYCLONEDDS_URI=file:///etc/cyclonedds/cyclonedds.xml
