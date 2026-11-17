@@ -7,7 +7,9 @@
   <xacro:property name="head_mount_xyz" value="-0.153 -0.0705 ${chassis_top_z}"/>
   <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは前面の中央。 -->
   <xacro:property name="head_camera_mesh_xyz" value="0.1461 -0.0146 0.0000"/>
-  <xacro:property name="head_camera_link_xyz" value="0.1483 -0.0146 0.0000"/>
+  <xacro:property name="head_camera_link_xyz" value="0.1483 -0.0146 0.0010"/>
+  <!-- 姿勢は、深度で見た床がTF上の床と重なるよう補正した値 -->
+  <xacro:property name="head_camera_link_rpy" value="${radians(-1.06)} ${radians(0.11)} 0"/>
 
   <!-- 部品のSTLはFusionの組み立ての共通原点(x右・-y前・z上)のままなので、リンク原点(関節の中心)からずらして向きを直す。 -->
   <xacro:macro name="head_part" params="file xyz">
@@ -115,7 +117,7 @@
   <!-- ドライバ(orbbec_camera)は画像のフレーム(head_camera_color_frame等)をこのフレームの子としてTFに出す。
        名前はlaunchのcamera_nameから決まる。 -->
   <joint name="${namespace}head_camera_joint" type="fixed">
-    <origin xyz="${head_camera_link_xyz}" rpy="0 0 0"/>
+    <origin xyz="${head_camera_link_xyz}" rpy="${head_camera_link_rpy}"/>
     <parent link="${namespace}head_tilt_link"/>
     <child link="${namespace}head_camera_link"/>
   </joint>
