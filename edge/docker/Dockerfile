@@ -52,9 +52,10 @@ RUN apt-get update && \
     rosdep install --from-paths /opt/ros2_controllers_ws/src --ignore-src -r -y && \
     rm -rf /var/lib/apt/lists/*
 
+# テストは固定したコミットより新しいaptのrealtime_toolsのAPIとずれてコンパイルできないため、作らない(使わない)。
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
     cd /opt/ros2_controllers_ws && \
-    colcon build --merge-install
+    colcon build --merge-install --cmake-args -DBUILD_TESTING=OFF
 
 # micro-ros-agentはjazzy含めどのdistroでもバイナリ(.deb)未リリース(index.ros.org上でRELEASEDだが各distro欄は空)。
 # ソースビルド必須。depend先のmicro_ros_msgsはバイナリ提供されているのでrosdepが自動解決する。
