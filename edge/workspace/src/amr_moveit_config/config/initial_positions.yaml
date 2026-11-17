@@ -7,3 +7,5 @@ initial_positions:
   shoulder_pan: 0
   wrist_flex: 0
   wrist_roll: 0
+  head_pan: 0
+  head_tilt: 0

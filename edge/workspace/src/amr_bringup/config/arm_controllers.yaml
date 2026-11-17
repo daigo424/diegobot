@@ -9,6 +9,9 @@ controller_manager:
     grip_group_controller:
       type: position_controllers/GripperActionController
 
+    head_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
     joint_state_broadcaster:
       type: joint_state_broadcaster/JointStateBroadcaster
 
@@ -42,3 +45,19 @@ grip_group_controller:
     goal_tolerance: 0.02
     # 物を掴むと目標の手前で止まるため、止まった時点で成功として返す。
     allow_stalling: true
+
+head_controller:
+  ros__parameters:
+    joints:
+      - head_pan
+      - head_tilt
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_nonzero_velocity_at_trajectory_end: true
+    constraints:
+      goal_time: 1.0
+      head_pan: {goal: 0.05}
+      head_tilt: {goal: 0.05}

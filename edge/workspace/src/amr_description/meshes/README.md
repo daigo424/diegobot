@@ -30,3 +30,7 @@ Download the 3D model from the "3D_Model_File" link on [Yahboom's HP60C page](ht
 
 Download the [T-Mini Plus LiDAR model by KaiserGabo on Thangs](https://thangs.com/designer/KaiserGabo/3d-model/T-Mini%20Plus%20LiDAR-1309417) and save it in this directory as `lidar.stl`.
 Before saving, move it so that the origin is at the center of the bottom face with +Z up (units: mm), which is what `../urdf/t_mini_plus_12.urdf.xacro` expects.
+
+### Orbbec Gemini 335L camera
+
+Download the Gemini 335L STL from [Orbbec's CAD download page for the Gemini 330 series](https://doc.orbbec.com/documentation/Orbbec%20Gemini%20330%20Series%20Documentation/Download%20CAD%20Files%20(Gemini%20330%20Series)) and save it as `head_camera/gemini_335l.stl`, without moving it (units: mm).

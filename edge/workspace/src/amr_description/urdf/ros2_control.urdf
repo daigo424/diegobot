@@ -28,6 +28,8 @@
     <xacro:arm_position_joint name="wrist_flex"/>
     <xacro:arm_position_joint name="wrist_roll"/>
     <xacro:arm_position_joint name="gripper"/>
+    <xacro:arm_position_joint name="head_pan"/>
+    <xacro:arm_position_joint name="head_tilt"/>
   </ros2_control>
 
   <gazebo>

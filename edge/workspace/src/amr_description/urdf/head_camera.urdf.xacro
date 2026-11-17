@@ -1,0 +1,124 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <xacro:arg name="namespace" default=""/>
+  <xacro:property name="namespace" value="$(arg namespace)"/>
+
+  <!-- 頭部カメラアームの土台を天板のどこに置くか -->
+  <xacro:property name="head_mount_xyz" value="-0.153 -0.0705 ${chassis_top_z}"/>
+  <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは前面の中央。 -->
+  <xacro:property name="head_camera_mesh_xyz" value="0.1461 -0.0146 0.0000"/>
+  <xacro:property name="head_camera_link_xyz" value="0.1483 -0.0146 0.0000"/>
+
+  <!-- 部品のSTLはFusionの組み立ての共通原点(x右・-y前・z上)のままなので、リンク原点(関節の中心)からずらして向きを直す。 -->
+  <xacro:macro name="head_part" params="file xyz">
+    <visual>
+      <origin xyz="${xyz}" rpy="0 0 ${pi / 2}"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/head_camera/${file}.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="3d_printed"/>
+    </visual>
+  </xacro:macro>
+
+  <xacro:macro name="box_inertial" params="mass xyz x y z">
+    <inertial>
+      <origin xyz="${xyz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia ixx="${mass / 12 * (y * y + z * z)}" ixy="0" ixz="0"
+               iyy="${mass / 12 * (x * x + z * z)}" iyz="0"
+               izz="${mass / 12 * (x * x + y * y)}"/>
+    </inertial>
+  </xacro:macro>
+
+  <joint name="${namespace}head_mount_joint" type="fixed">
+    <origin xyz="${head_mount_xyz}" rpy="0 0 0"/>
+    <parent link="${namespace}base_link"/>
+    <child link="${namespace}head_base_link"/>
+  </joint>
+
+  <link name="${namespace}head_base_link">
+    <xacro:head_part file="base" xyz="0 0 0"/>
+    <xacro:head_part file="base_chassis_linker" xyz="0 0 0"/>
+    <xacro:head_part file="pan_base_linker" xyz="0 0 0"/>
+    <visual>
+      <origin xyz="-0.0180 0.0001 0.0723" rpy="${pi} 0 ${pi}"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/arm/sts3215_03a_v1.stl"/>
+      </geometry>
+      <material name="sts3215"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0043 0 0.0487" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0803 0.1149 0.0974"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.15" xyz="-0.0043 0 0.0487" x="0.0803" y="0.1149" z="0.0974"/>
+  </link>
+
+  <joint name="${namespace}head_pan" type="revolute">
+    <origin xyz="-0.0305 0.0001 0.0886" rpy="0 0 0"/>
+    <parent link="${namespace}head_base_link"/>
+    <child link="${namespace}head_pan_link"/>
+    <!-- サーボの位置の値が増える向きが、上から見て時計回り。 -->
+    <axis xyz="0 0 -1"/>
+    <limit effort="10" velocity="10" lower="${-pi / 2}" upper="${pi / 2}"/>
+  </joint>
+
+  <link name="${namespace}head_pan_link">
+    <xacro:head_part file="pan_arm_bottom" xyz="0.0305 -0.0001 -0.0886"/>
+    <xacro:head_part file="pan_arm_pillar" xyz="0.0305 -0.0001 -0.0886"/>
+    <xacro:head_part file="pan_arm_top" xyz="0.0305 -0.0001 -0.0886"/>
+    <visual>
+      <origin xyz="-0.0159 -0.0006 0.2285" rpy="${pi / 2} 0 0"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/arm/sts3215_03a_v1.stl"/>
+      </geometry>
+      <material name="sts3215"/>
+    </visual>
+    <collision>
+      <origin xyz="-0.0178 0.0011 0.1014" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.0604 0.0500 0.2913"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.15" xyz="-0.0178 0.0011 0.1014" x="0.0604" y="0.0500" z="0.2913"/>
+  </link>
+
+  <joint name="${namespace}head_tilt" type="revolute">
+    <origin xyz="-0.0034 0.0154 0.2285" rpy="0 0 0"/>
+    <parent link="${namespace}head_pan_link"/>
+    <child link="${namespace}head_tilt_link"/>
+    <!-- サーボの位置の値が増える向きが、カメラが上を向く向き。 -->
+    <axis xyz="0 -1 0"/>
+    <limit effort="10" velocity="10" lower="${-pi / 4}" upper="${pi / 4}"/>
+  </joint>
+
+  <link name="${namespace}head_tilt_link">
+    <xacro:head_part file="tilt_arm" xyz="0.0339 -0.0155 -0.3171"/>
+    <visual>
+      <origin xyz="${head_camera_mesh_xyz}" rpy="${pi / 2} 0 ${pi / 2}"/>
+      <geometry>
+        <mesh filename="package://amr_description/meshes/head_camera/gemini_335l.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="dark"/>
+    </visual>
+    <collision>
+      <origin xyz="0.0681 -0.0146 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.1604 0.1240 0.0290"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.15" xyz="0.0681 -0.0146 0" x="0.1604" y="0.1240" z="0.0290"/>
+  </link>
+
+  <!-- ドライバ(orbbec_camera)は画像のフレーム(head_camera_color_frame等)をこのフレームの子としてTFに出す。
+       名前はlaunchのcamera_nameから決まる。 -->
+  <joint name="${namespace}head_camera_joint" type="fixed">
+    <origin xyz="${head_camera_link_xyz}" rpy="0 0 0"/>
+    <parent link="${namespace}head_tilt_link"/>
+    <child link="${namespace}head_camera_link"/>
+  </joint>
+  <link name="${namespace}head_camera_link"/>
+
+</robot>

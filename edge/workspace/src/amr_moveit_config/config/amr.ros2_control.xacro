@@ -50,7 +50,20 @@
                 </state_interface>
                 <state_interface name="velocity"/>
             </joint>
-
+            <joint name="head_pan">
+                <command_interface name="position"/>
+                <state_interface name="position">
+                  <param name="initial_value">${initial_positions['head_pan']}</param>
+                </state_interface>
+                <state_interface name="velocity"/>
+            </joint>
+            <joint name="head_tilt">
+                <command_interface name="position"/>
+                <state_interface name="position">
+                  <param name="initial_value">${initial_positions['head_tilt']}</param>
+                </state_interface>
+                <state_interface name="velocity"/>
+            </joint>
         </ros2_control>
     </xacro:macro>
 </robot>
