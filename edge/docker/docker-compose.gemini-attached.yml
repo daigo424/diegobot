@@ -1,0 +1,20 @@
+services:
+  gemini:
+    image: diegobot:latest
+    container_name: diegobot_gemini
+    depends_on:
+      - diegobot # diegobotサービスのbuild:でしかdiegobot:latestイメージが作られないため、image:のみのこちらは先にそちらのビルド完了が要る
+    network_mode: host
+    tty: true
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID}
+    # Gemini 335L(頭部の深度カメラ)はlibusbで直接USBデバイスを開く。渡し方の理由はdocker-compose.hp60c-attached.ymlと同じ。
+    volumes:
+      - ../workspace:/workspace
+      - /dev/bus/usb:/dev/bus/usb
+    device_cgroup_rules:
+      - 'c 189:* rmw'
+    restart: unless-stopped
+    command: >
+      bash -c "source /workspace/install/setup.bash &&
+      exec ros2 launch amr_bringup gemini_335l.launch.py"

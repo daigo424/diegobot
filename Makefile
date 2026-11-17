@@ -24,14 +24,16 @@ LIDAR_FRONT_RIGHT_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_FRONT_RIGHT_
 LIDAR_REAR_LEFT_ATTACHED   ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_REAR_LEFT_PORT)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
 ARM_ATTACHED       ?= $(call _HOST_DEVICE_EXISTS,HOST_ARM_PORT)
-# HP60Cは機体ごとに変わるパスが無いため、USBのベンダー/プロダクトIDで判定する。
+# HP60CとGemini 335Lは機体ごとに変わるパスが無いため、USBのベンダー/プロダクトIDで判定する。
 HP60C_ATTACHED     ?= $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell lsusb -d 3482:6723 >/dev/null 2>&1 && echo 1 || echo 0),0)
+GEMINI_ATTACHED    ?= $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell lsusb -d 2bc5:0804 >/dev/null 2>&1 && echo 1 || echo 0),0)
 LIDAR_FRONT_RIGHT_COMPOSE_FILE := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED)),edge/docker/docker-compose.lidar-front-right-attached.yml,)
 LIDAR_REAR_LEFT_COMPOSE_FILE   := $(if $(filter 1,$(LIDAR_REAR_LEFT_ATTACHED)),edge/docker/docker-compose.lidar-rear-left-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
 ARM_COMPOSE_FILE       := $(if $(filter 1,$(ARM_ATTACHED)),edge/docker/docker-compose.arm-attached.yml,)
 HP60C_COMPOSE_FILE     := $(if $(filter 1,$(HP60C_ATTACHED)),edge/docker/docker-compose.hp60c-attached.yml,)
-BASE_COMPOSE_FILE      := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED) $(LIDAR_REAR_LEFT_ATTACHED) $(MICRO_ROS_ATTACHED) $(ARM_ATTACHED) $(HP60C_ATTACHED)),edge/docker/docker-compose.base.yml,)
+GEMINI_COMPOSE_FILE    := $(if $(filter 1,$(GEMINI_ATTACHED)),edge/docker/docker-compose.gemini-attached.yml,)
+BASE_COMPOSE_FILE      := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED) $(LIDAR_REAR_LEFT_ATTACHED) $(MICRO_ROS_ATTACHED) $(ARM_ATTACHED) $(HP60C_ATTACHED) $(GEMINI_ATTACHED)),edge/docker/docker-compose.base.yml,)
 
 # 物体検出等のサーバー側処理用コンテナ(NVIDIA GPU前提)。ラズパイでは動かさない。
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
@@ -40,7 +42,7 @@ else
 PERCEPTION_COMPOSE_FILE := edge/docker/docker-compose.perception.yml
 endif
 
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(LIDAR_FRONT_RIGHT_COMPOSE_FILE),-f $(LIDAR_FRONT_RIGHT_COMPOSE_FILE)) $(if $(LIDAR_REAR_LEFT_COMPOSE_FILE),-f $(LIDAR_REAR_LEFT_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) $(if $(HP60C_COMPOSE_FILE),-f $(HP60C_COMPOSE_FILE)) $(if $(BASE_COMPOSE_FILE),-f $(BASE_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(LIDAR_FRONT_RIGHT_COMPOSE_FILE),-f $(LIDAR_FRONT_RIGHT_COMPOSE_FILE)) $(if $(LIDAR_REAR_LEFT_COMPOSE_FILE),-f $(LIDAR_REAR_LEFT_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) $(if $(HP60C_COMPOSE_FILE),-f $(HP60C_COMPOSE_FILE)) $(if $(GEMINI_COMPOSE_FILE),-f $(GEMINI_COMPOSE_FILE)) $(if $(BASE_COMPOSE_FILE),-f $(BASE_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
