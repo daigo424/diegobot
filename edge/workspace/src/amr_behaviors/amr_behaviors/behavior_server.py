@@ -52,7 +52,8 @@ class BehaviorServer(Node):
         self.search_poses = p('search_poses', [0.0]).value
         self.gaze_pose = p('gaze_pose', [0.0]).value
         self.gaze_joints = p('gaze_joints', ['']).value
-        self.gaze_wrist_limits = p('gaze_wrist_limits', [0.3, 1.45]).value
+        self.gaze_limits = {'wrist_flex': tuple(p('gaze_wrist_limits', [0.3, 1.45]).value),
+                            'shoulder_pan': tuple(p('gaze_pan_limits', [-3.15, 0.5]).value)}
         self.gaze_period = p('gaze_period', 0.2).value
         self.camera_link = p('camera_link', 'camera_camera_link_0').value
         self.base_frame = p('base_frame', 'base_link').value
@@ -193,7 +194,7 @@ class BehaviorServer(Node):
         target = self.sighting[0]
         pose = dict(zip(self.arm_joints, self.gaze_pose))
         q, offset = self.gaze.solve(self.to_base(target, self.current_pose()), pose, pose,
-                                    limits={'wrist_flex': tuple(self.gaze_wrist_limits)})
+                                    limits=self.gaze_limits)
         # 付け根と手首だけでは写せない向き(車体の後ろ等)なら見回しに任せる。
         if np.max(np.abs(offset)) > self.sighting_max_offset:
             return None
@@ -332,7 +333,7 @@ class BehaviorServer(Node):
         """odom上の物体へカメラの光軸を向ける腕の関節角度(付け根と手首だけを動かす)。"""
         fixed = dict(zip(self.arm_joints, self.gaze_pose))
         q, _ = self.gaze.solve(self.to_base(target, pose), fixed, seed,
-                               limits={'wrist_flex': tuple(self.gaze_wrist_limits)})
+                               limits=self.gaze_limits)
         return q
 
     def stream_arm(self, joints):
