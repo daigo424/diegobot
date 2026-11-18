@@ -3,8 +3,6 @@
   <xacro:arg name="namespace" default=""/>
   <xacro:property name="namespace" value="$(arg namespace)"/>
 
-  <!-- 頭部カメラアームの土台を天板のどこに置くか -->
-  <xacro:property name="head_mount_xyz" value="-0.153 -0.0705 ${chassis_top_z}"/>
   <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは前面の中央。 -->
   <xacro:property name="head_camera_mesh_xyz" value="0.1461 -0.0146 0.0000"/>
   <xacro:property name="head_camera_link_xyz" value="0.1483 -0.0146 0.0010"/>
@@ -31,12 +29,6 @@
                izz="${mass / 12 * (x * x + y * y)}"/>
     </inertial>
   </xacro:macro>
-
-  <joint name="${namespace}head_mount_joint" type="fixed">
-    <origin xyz="${head_mount_xyz}" rpy="0 0 0"/>
-    <parent link="${namespace}base_link"/>
-    <child link="${namespace}head_base_link"/>
-  </joint>
 
   <link name="${namespace}head_base_link">
     <xacro:head_part file="base" xyz="0 0 0"/>

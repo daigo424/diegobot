@@ -25,23 +25,26 @@
     </xacro:if>
 
     <joint name="${namespace}arm_mount_joint" type="fixed">
-        <origin xyz="-0.047 0 ${chassis_top_z}" rpy="0 0 0"/>
+        <origin xyz="-0.047 0.0705 ${chassis_top_z}" rpy="0 0 0"/>
         <parent link="${namespace}base_link"/>
         <child link="${namespace}arm_mount_link"/>
     </joint>
 
+    <!-- 台座のSTLは上面がy=0で下が+y、前が+zの向きで書き出されているため、車体の向きに回して台座の中心を原点に置く。 -->
+    <xacro:property name="arm_mount_mesh_xyz" value="-0.0275 0 0.0099"/>
+    <xacro:property name="arm_mount_mesh_rpy" value="${-pi / 2} 0 ${-pi / 2}"/>
     <link name="${namespace}arm_mount_link">
         <visual>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <origin xyz="${arm_mount_mesh_xyz}" rpy="${arm_mount_mesh_rpy}"/>
             <geometry>
-                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.0001 0.0001 0.0001"/>
+                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.001 0.001 0.001"/>
             </geometry>
             <material name="dark"/>
         </visual>
         <collision>
-            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <origin xyz="${arm_mount_mesh_xyz}" rpy="${arm_mount_mesh_rpy}"/>
             <geometry>
-                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.0001 0.0001 0.0001"/>
+                <mesh filename="package://amr_description/meshes/arm_mount.stl" scale="0.001 0.001 0.001"/>
             </geometry>
         </collision>
     </link>
@@ -51,5 +54,12 @@
         <origin xyz="-0.021 0 0.01" rpy="0 0 0"/>
         <parent link="${namespace}arm_mount_link"/>
         <child link="${namespace}arm_base_link"/>
+    </joint>
+
+    <!-- 土台が少し傾いて付いているため、傾きと高さは頭部カメラの深度で見た床がTF上の床に重なるよう合わせた値 -->
+    <joint name="${namespace}head_mount_joint" type="fixed">
+        <origin xyz="-0.047 -0.0705 ${chassis_top_z - 0.001}" rpy="${radians(-0.93)} ${radians(-0.25)} 0"/>
+        <parent link="${namespace}base_link"/>
+        <child link="${namespace}head_base_link"/>
     </joint>
 </robot>
