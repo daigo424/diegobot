@@ -18,8 +18,11 @@ def generate_launch_description():
             'enable_point_cloud': 'false',
             'depth_width': '848',
             'depth_height': '480',
-            'color_width': '1280',
-            'color_height': '720',
+            'color_width': '848',
+            'color_height': '480',
+            # 物を探す処理はカラーと深度の画素がそろっている前提のため、カメラの中で深度をカラーに合わせる。
+            'depth_registration': 'true',
+            'align_mode': 'HW',
             # Pi 4では多いとカラーのMJPEG展開と圧縮の処理が追いつかない。
             'depth_fps': '15',
             'color_fps': '15',
