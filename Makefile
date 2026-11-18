@@ -14,14 +14,18 @@ else
 GPU_COMPOSE_FILE   := edge/docker/docker-compose.gpu-native.yml
 endif
 # 無いデバイスパスをdocker composeにマウントさせようとするとコンテナ起動自体が失敗するため、
-# 実際に接続されているハードウェアだけをoverrideで足す。LiDAR/micro-ROS/アームはedge/.envのデバイスパスが
-# 存在するかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
+# 実際に接続されているハードウェアだけをoverrideで足す。micro-ROS/アームはedge/.envのデバイスパスが
+# 存在するかで、LiDARは本体のシリアル番号が見つかるかで自動判定する。ROBOT_ATTACHED=0で全て外す(個別に*_ATTACHED=0/1で上書きも可)。
 ROBOT_ATTACHED     ?= 1
 # edge(ロボット側のROS一式)のコンテナが使う環境変数(デバイスパス・ROS_DOMAIN_ID等)。
 EDGE_ENV           := edge/.env
 _HOST_DEVICE_EXISTS = $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./$(EDGE_ENV) 2>/dev/null; [ -e "$${$(1)}" ] && echo 1 || echo 0),0)
-LIDAR_FRONT_RIGHT_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_FRONT_RIGHT_PORT)
-LIDAR_REAR_LEFT_ATTACHED   ?= $(call _HOST_DEVICE_EXISTS,HOST_LIDAR_REAR_LEFT_PORT)
+# LiDARの変換基板は2台とも同じシリアル番号で見分けられないため、本体のシリアル番号から挿さっているポートを探す。
+_LIDAR_PORTS := $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell . ./$(EDGE_ENV) 2>/dev/null; python3 edge/provisioning/scripts/find_lidar_ports.py "$$LIDAR_FRONT_RIGHT_SERIAL" "$$LIDAR_REAR_LEFT_SERIAL" 2>/dev/null))
+export HOST_LIDAR_FRONT_RIGHT_PORT := $(word 1,$(_LIDAR_PORTS))
+export HOST_LIDAR_REAR_LEFT_PORT   := $(word 2,$(_LIDAR_PORTS))
+LIDAR_FRONT_RIGHT_ATTACHED ?= $(if $(filter-out -,$(HOST_LIDAR_FRONT_RIGHT_PORT)),1,0)
+LIDAR_REAR_LEFT_ATTACHED   ?= $(if $(filter-out -,$(HOST_LIDAR_REAR_LEFT_PORT)),1,0)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
 ARM_ATTACHED       ?= $(call _HOST_DEVICE_EXISTS,HOST_ARM_PORT)
 # HP60CとGemini 335Lは機体ごとに変わるパスが無いため、USBのベンダー/プロダクトIDで判定する。

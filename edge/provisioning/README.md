@@ -37,7 +37,7 @@ BLE経由のWi-Fiプロビジョニングデーモン（Dockerコンテナの外
 | コンテナ | 起動条件 | 中身 |
 |---|---|---|
 | micro-ros-agent | 環境変数 `HOST_MICRO_ROS_PORT`(見本は`edge/.env.example`)のデバイスが存在する | ESP32とのmicro-ROS Agent |
-| lidar_front_right / lidar_rear_left | 環境変数 `HOST_LIDAR_FRONT_RIGHT_PORT` / `HOST_LIDAR_REAR_LEFT_PORT` のデバイスが存在する | YDLIDAR T-mini Plus(`lidar.launch.xml`) |
+| lidar_front_right / lidar_rear_left | 環境変数 `LIDAR_FRONT_RIGHT_SERIAL` / `LIDAR_REAR_LEFT_SERIAL` のシリアル番号のLiDARが接続されている(`scripts/find_lidar_ports.py`が本体に問い合わせて挿さっているポートを探す) | YDLIDAR T-mini Plus(`lidar.launch.xml`) |
 | arm | 環境変数 `HOST_ARM_PORT` のデバイスが存在する | SO-101(`arm.launch.xml`) |
 | hp60c | HP60C(USB `3482:6723`)が接続されている | 深度カメラ(`nuwa_hp60c.launch.py`) |
 | base | 上のデバイスのどれか1つでも接続されている | robot_state_publisherとEKF(`base.launch.xml`) |
