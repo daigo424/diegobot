@@ -3,9 +3,10 @@
   <xacro:arg name="namespace" default=""/>
   <xacro:property name="namespace" value="$(arg namespace)"/>
 
-  <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは前面の中央。 -->
+  <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは、ドライバーが深度の原点にする左の赤外線カメラのレンズで、
+       前面の中央から左へ、手首カメラと同じ物を見た位置が合うようずらしている。 -->
   <xacro:property name="head_camera_mesh_xyz" value="0.1461 -0.0146 0.0000"/>
-  <xacro:property name="head_camera_link_xyz" value="0.1483 -0.0146 0.0010"/>
+  <xacro:property name="head_camera_link_xyz" value="0.1483 0.0174 0.0010"/>
   <!-- 姿勢は、深度で見た床がTF上の床と重なるよう補正した値 -->
   <xacro:property name="head_camera_link_rpy" value="${radians(-1.06)} ${radians(0.11)} 0"/>
 
