@@ -23,7 +23,24 @@ const int PWM_RANGE    = 255;
 
 // 車体パラメータ
 const float WHEEL_BASE_M  = 0.295f;  // トレッド幅（左右輪の接地点の中心間距離: 29.5cm）
-const float MAX_SPEED_MPS = 0.5f;   // 最大想定速度 (m/s)
+// 回る時は車輪が横に滑り、実際の間隔どおりには回らない。指令の変換とオドメトリには、床で回した量に合う間隔を使う。
+const float WHEEL_BASE_EFFECTIVE_M = WHEEL_BASE_M * 1.06f;
+
+// --- 車輪の速度制御 ---
+// 目標の速さから決めるPWM(フィードフォワード)に、実際の速さとの差のPI補正を足す。
+// PWMと空転の速さはほぼ比例するため、比例の傾きと、動き出すのに要る分を足して最初の値にする。
+const float FF_MPS_AT_FULL_DUTY = 0.61f;
+const float FF_STATIC_RATIO = 0.05f;
+const float SPEED_KP = 1.5f;   // PWM比率 / (m/s)
+const float SPEED_KI = 8.0f;   // PWM比率 / m
+// 積分が大きくなりすぎると、目標が変わった後に行き過ぎが長く続くため上限を付ける。
+const float SPEED_I_LIMIT = 0.5f;  // PWM比率
+const int64_t SPEED_CONTROL_PERIOD_MS = 20;
+// 目標の速さは指令へ徐々に近づける。いきなり変えると、動き出しの速い右輪が先に進んで向きが変わる。
+const float WHEEL_ACCEL_MPS2 = 0.5f;
+const float WHEEL_DECEL_MPS2 = 1.0f;
+// 目標がこれより小さければ止める(止めたい時にPIが細かく回し続けないため)。
+const float STOP_SPEED_MPS = 0.005f;
 
 // micro-ROSシリアルのボーレート。agent側(-b)と揃える。115200では/odom等の送信量に足りず、
 // 921600ではラズパイ5がCH340の受信を取りこぼしてreliableストリームが詰まる。
@@ -39,7 +56,9 @@ bool imu_available = false;
 // 車輪軸換算CPR(モーター軸11パルス/回転を4逓倍・56:1減速で換算)・車輪直径(68mm、実測)からの距離換算。
 const float COUNTS_PER_REV = 2464.0f;
 const float WHEEL_DIAMETER_M = 0.068f;
-const float METERS_PER_COUNT = (WHEEL_DIAMETER_M * PI) / COUNTS_PER_REV;
+// 床で転がると、外径から計算するより進まない。メジャーで測った進んだ距離に合わせた直径を距離の換算に使う。
+const float WHEEL_ROLLING_DIAMETER_M = WHEEL_DIAMETER_M * 0.946f;
+const float METERS_PER_COUNT = (WHEEL_ROLLING_DIAMETER_M * PI) / COUNTS_PER_REV;
 const float RADIANS_PER_COUNT = (2.0f * PI) / COUNTS_PER_REV;
 
 // 4逓倍クアドラチャデコード用の状態遷移テーブル。
@@ -97,6 +116,16 @@ rcl_node_t node;
 int64_t last_cmd_vel_ms = 0;
 bool motors_active = false;
 
+struct WheelControl {
+  float target_mps;    // /cmd_velから決めた速さ
+  float setpoint_mps;  // target_mpsへ徐々に近づけた、いま追う速さ
+  float integral;
+  long prev_count;
+};
+WheelControl left_wheel = {0.0f, 0.0f, 0.0f, 0};
+WheelControl right_wheel = {0.0f, 0.0f, 0.0f, 0};
+int64_t prev_control_ms = 0;
+
 // agentの再起動やUSB抜き差しから自動復帰するため、agentの生存を能動的に監視する。
 enum State {
   WAITING_AGENT,
@@ -120,6 +149,9 @@ void stamp_header(std_msgs__msg__Header &header) {
 }
 
 void stop_motors() {
+  left_wheel.target_mps = right_wheel.target_mps = 0.0f;
+  left_wheel.setpoint_mps = right_wheel.setpoint_mps = 0.0f;
+  left_wheel.integral = right_wheel.integral = 0.0f;
   digitalWrite(PIN_AIN1, LOW);
   digitalWrite(PIN_AIN2, LOW);
   digitalWrite(PIN_BIN1, LOW);
@@ -134,12 +166,12 @@ void set_motor(int ch, int pin_in1, int pin_in2, float speed_ratio) {
   speed_ratio = constrain(speed_ratio, -1.0f, 1.0f);
   int duty = abs(speed_ratio) * PWM_RANGE;
 
-  if (speed_ratio > 0.05f) {
+  if (speed_ratio > 0.0f) {
     // 正転
     digitalWrite(pin_in1, HIGH);
     digitalWrite(pin_in2, LOW);
     ledcWrite(ch, duty);
-  } else if (speed_ratio < -0.05f) {
+  } else if (speed_ratio < 0.0f) {
     // 逆転
     digitalWrite(pin_in1, LOW);
     digitalWrite(pin_in2, HIGH);
@@ -152,6 +184,46 @@ void set_motor(int ch, int pin_in1, int pin_in2, float speed_ratio) {
   }
 }
 
+// 1輪ぶんの目標の速さと実際の速さから、PWM比率(-1〜1)を決める。
+float wheel_output(WheelControl &w, long count, float dt) {
+  float measured = (count - w.prev_count) * METERS_PER_COUNT / dt;
+  w.prev_count = count;
+  // 速くなる向き(0から離れる)は加速、遅くなる向きは減速の上限で近づける。
+  bool speeding_up = fabsf(w.target_mps) > fabsf(w.setpoint_mps) && w.target_mps * w.setpoint_mps >= 0.0f;
+  float max_step = (speeding_up ? WHEEL_ACCEL_MPS2 : WHEEL_DECEL_MPS2) * dt;
+  w.setpoint_mps += constrain(w.target_mps - w.setpoint_mps, -max_step, max_step);
+  // 向きが変わる時も0付近を通るため、ここで積分を捨てて逆向きへ持ち越さない。
+  if (fabsf(w.setpoint_mps) < STOP_SPEED_MPS) {
+    w.integral = 0.0f;
+    return 0.0f;
+  }
+  float error = w.setpoint_mps - measured;
+  float ff = w.setpoint_mps / FF_MPS_AT_FULL_DUTY + copysignf(FF_STATIC_RATIO, w.setpoint_mps);
+  float out = ff + SPEED_KP * error + w.integral;
+  // 出力が上限に張り付いている間は、その向きへ積分を進めない(電池が減って目標に届かない時に積分がたまり続けるため)。
+  bool saturated = (out >= 1.0f && error > 0.0f) || (out <= -1.0f && error < 0.0f);
+  if (!saturated) {
+    w.integral = constrain(w.integral + SPEED_KI * error * dt, -SPEED_I_LIMIT, SPEED_I_LIMIT);
+  }
+  return constrain(ff + SPEED_KP * error + w.integral, -1.0f, 1.0f);
+}
+
+void control_wheels() {
+  noInterrupts();
+  long left_count = left_encoder_count;
+  long right_count = right_encoder_count;
+  interrupts();
+  int64_t now_ms = uxr_millis();
+  float dt = (now_ms - prev_control_ms) / 1000.0f;
+  prev_control_ms = now_ms;
+  if (dt <= 0.0f) return;
+  float left = wheel_output(left_wheel, left_count, dt);
+  // 右モーターは鏡像に付いているため、カウントもPWMも符号を反転する。
+  float right = wheel_output(right_wheel, -right_count, dt);
+  set_motor(PWM_CH_LEFT, PIN_AIN1, PIN_AIN2, left);
+  set_motor(PWM_CH_RIGHT, PIN_BIN1, PIN_BIN2, -right);
+}
+
 // /cmd_vel 受信コールバック
 void subscription_callback(const void * msgin) {
   const geometry_msgs__msg__Twist * twist_msg = (const geometry_msgs__msg__Twist *)msgin;
@@ -160,15 +232,11 @@ void subscription_callback(const void * msgin) {
   float angular_z = twist_msg->angular.z;  // 旋回角速度 (rad/s)
 
   // 差動二輪の運動学計算 (左右車輪の目標並進速度)
-  float left_vel  = linear_x - (angular_z * WHEEL_BASE_M / 2.0f);
-  float right_vel = linear_x + (angular_z * WHEEL_BASE_M / 2.0f);
+  float left_vel  = linear_x - (angular_z * WHEEL_BASE_EFFECTIVE_M / 2.0f);
+  float right_vel = linear_x + (angular_z * WHEEL_BASE_EFFECTIVE_M / 2.0f);
 
-  // 速度から -1.0〜1.0 の比率へ正規化
-  float left_ratio  = left_vel / MAX_SPEED_MPS;
-  float right_ratio = right_vel / MAX_SPEED_MPS;
-
-  set_motor(PWM_CH_LEFT, PIN_AIN1, PIN_AIN2, left_ratio);
-  set_motor(PWM_CH_RIGHT, PIN_BIN1, PIN_BIN2, -right_ratio);
+  left_wheel.target_mps = left_vel;
+  right_wheel.target_mps = right_vel;
 
   last_cmd_vel_ms = uxr_millis();
   motors_active = true;
@@ -219,6 +287,9 @@ bool create_entities() {
   prev_right_count = right_encoder_count;
   interrupts();
   prev_odom_ms = uxr_millis();
+  left_wheel.prev_count = prev_left_count;
+  right_wheel.prev_count = -prev_right_count;
+  prev_control_ms = prev_odom_ms;
 
   return true;
 }
@@ -297,7 +368,7 @@ void publish_odom() {
   float right_dist = right_delta * METERS_PER_COUNT;
 
   float delta_center = (left_dist + right_dist) / 2.0f;
-  float delta_theta  = (right_dist - left_dist) / WHEEL_BASE_M;
+  float delta_theta  = (right_dist - left_dist) / WHEEL_BASE_EFFECTIVE_M;
 
   // 区間中点でのthetaを使って積分することで、大きめの区間でも直線移動をわずかな
   // 円弧として近似でき、単純なオイラー積分より誤差が小さくなる。
@@ -428,6 +499,7 @@ void _loop() {
           stop_motors();
           motors_active = false;
         }
+        EXECUTE_EVERY_N_MS(SPEED_CONTROL_PERIOD_MS, control_wheels(););
         EXECUTE_EVERY_N_MS(50, publish_imu();); // 20Hz
         EXECUTE_EVERY_N_MS(33, publish_odom();); // 30Hz
         // ラズパイはRTCが無く起動後にNTPで時計が飛ぶため、接続時の1回だけの同期ではheader.stampがずれたままになる。

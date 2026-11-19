@@ -235,6 +235,25 @@ pi-setup:
 	ssh -t $(PI_USER)@$(PI_HOST) 'cd ~/diegobot/edge/provisioning && sudo ./setup.sh'
 pi-setup-dev:
 	ssh -t $(PI_USER)@$(PI_HOST) 'cd ~/diegobot/edge/provisioning && sudo ./setup.dev.sh'
+# ESP32のファームを開発機でビルドし、ラズパイに挿したままesptoolで書き込む。
+# ポートはmicro-ROS agentが開いているため、書き込む間だけagentのコンテナを止める。
+# 2回目以降はアプリ本体だけ書く。ブートローダー・パーティション表も書き直すときはFULL=1。
+PIO ?= $(HOME)/.platformio/penv/bin/pio
+ESP32_BUILD := edge/esp32/.pio/build/esp32dev
+ESP32_FLASH_DIR := /tmp/esp32-flash
+pi-flash-esp32:
+	cd edge/esp32 && $(PIO) run
+	ssh $(PI_SSH_OPTS) $(PI_USER)@$(PI_HOST) 'mkdir -p $(ESP32_FLASH_DIR) && \
+	  { [ -x ~/.venvs/esptool/bin/esptool.py ] || { python3 -m venv ~/.venvs/esptool && ~/.venvs/esptool/bin/pip install -q "esptool>=4.11,<5"; }; }'
+	scp $(PI_SSH_OPTS) $(ESP32_BUILD)/firmware.bin $(if $(filter 1,$(FULL)),$(ESP32_BUILD)/bootloader.bin $(ESP32_BUILD)/partitions.bin $(HOME)/.platformio/packages/framework-arduinoespressif32/tools/partitions/boot_app0.bin) \
+	  $(PI_USER)@$(PI_HOST):$(ESP32_FLASH_DIR)/
+	ssh $(PI_SSH_OPTS) $(PI_USER)@$(PI_HOST) 'set -e; . ~/diegobot/edge/.env; cd $(ESP32_FLASH_DIR); \
+	  trap "docker start diegobot_micro_ros_agent >/dev/null" EXIT; \
+	  docker stop diegobot_micro_ros_agent >/dev/null; \
+	  ~/.venvs/esptool/bin/esptool.py --chip esp32 --port "$$HOST_MICRO_ROS_PORT" --baud 460800 write_flash -z \
+	    --flash_mode dio --flash_freq 40m --flash_size detect \
+	    $(if $(filter 1,$(FULL)),0x1000 bootloader.bin 0x8000 partitions.bin 0xe000 boot_app0.bin) 0x10000 firmware.bin'
+
 FILE ?=
 pi-fetch:
 	scp $(PI_SSH_OPTS) $(PI_USER)@$(PI_HOST):$(FILE) .
