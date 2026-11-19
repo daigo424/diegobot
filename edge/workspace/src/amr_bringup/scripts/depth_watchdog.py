@@ -27,6 +27,8 @@ class DepthWatchdog(Node):
         self.camera_frame = self.declare_parameter('camera_frame', 'camera_camera_link_0').value
         # これより低いとカメラが近くの物を見ていることがあり、深度の抜けを異常とみなさない(待機の姿勢では約0.3m)。
         self.min_camera_height = self.declare_parameter('min_camera_height', 0.27).value
+        # 画像の下側には近すぎて深度の出ないグリッパーの指が常に写るため、上からこの割合の行だけで数える。
+        self.check_rows = self.declare_parameter('check_rows', 0.5).value
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.started = time.monotonic()
@@ -54,7 +56,9 @@ class DepthWatchdog(Node):
         if not self.camera_is_high():
             self.bad_since = None
             return
-        ratio = float(np.count_nonzero(np.frombuffer(msg.data, np.uint16))) / (msg.width * msg.height)
+        rows = max(1, int(msg.height * self.check_rows))
+        top = np.frombuffer(msg.data, np.uint16, count=rows * msg.step // 2)
+        ratio = float(np.count_nonzero(top)) / top.size
         if ratio >= self.min_valid_ratio:
             if self.bad_since is not None:
                 self.get_logger().info(f'depth recovered ({ratio:.0%} valid)')

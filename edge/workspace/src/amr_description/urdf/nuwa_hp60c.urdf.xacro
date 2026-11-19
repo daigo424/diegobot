@@ -9,8 +9,11 @@
   <xacro:property name="camera_mount_rpy" value="${radians(-86.81)} ${radians(-3.51)} ${radians(91.03)}"/>
 
   <!-- カメラの取付位置と姿勢 -->
-  <xacro:property name="camera_xyz" value="-0.005 -0.008 0.002"/>
-  <xacro:property name="camera_rpy" value="${pi/2} 0 ${pi/180*90}"/>
+  <xacro:property name="camera_xyz" value="-0.0012 -0.0051 0.0007"/>
+  <xacro:property name="camera_rpy" value="${pi/2} 0 ${radians(114.8)}"/>
+  <!-- STLは腕に付く部分が少し傾いた座標で書き出されているため、腕に付く部分が上の取付位置に来るよう戻す。 -->
+  <xacro:property name="camera_mount_mesh_xyz" value="0 0.0008 0"/>
+  <xacro:property name="camera_mount_mesh_rpy" value="${radians(2.17)} 0 0"/>
 
   <joint name="${namespace}arm_camera_mount_joint" type="fixed">
     <origin xyz="${camera_mount_xyz}" rpy="${camera_mount_rpy}"/>
@@ -20,14 +23,14 @@
 
   <link name="${namespace}arm_camera_mount_link">
     <visual>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="${camera_mount_mesh_xyz}" rpy="${camera_mount_mesh_rpy}"/>
       <geometry>
         <mesh filename="package://amr_description/meshes/arm_camera_mount.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="3d_printed"/>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="${camera_mount_mesh_xyz}" rpy="${camera_mount_mesh_rpy}"/>
       <geometry>
         <mesh filename="package://amr_description/meshes/arm_camera_mount.stl" scale="0.001 0.001 0.001"/>
       </geometry>
