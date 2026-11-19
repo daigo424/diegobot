@@ -83,6 +83,15 @@ class BehaviorServer(Node):
         self.max_drive = p('max_drive', 1.5).value
         self.sighting_max_age = p('sighting_max_age', 600.0).value
         self.sighting_max_offset = p('sighting_max_offset', 0.2).value
+        # 探す・物を見続けるカメラ。headなら頭部のパン・チルトで見回し、アームはhead_arm_poseでよけておく。
+        self.view = p('view_camera', 'head').value
+        self.head_joints = p('head_joints', ['head_pan', 'head_tilt']).value
+        self.head_camera_link = p('head_camera_link', 'head_camera_link').value
+        self.head_search_poses = p('head_search_poses', [0.0, -0.45]).value
+        self.head_arm_pose = p('head_arm_pose', [-0.6, -1.65, 1.4, 0.8519, -1.5708]).value
+        self.head_speed = p('head_speed', 1.0).value
+        find_service = {'head': p('head_find_service', '/head_object_finder/find').value,
+                        'wrist': p('wrist_find_service', '/object_finder/find').value}[self.view]
 
         group = ReentrantCallbackGroup()
         self.odom = None
@@ -101,9 +110,11 @@ class BehaviorServer(Node):
         self.create_subscription(JointState, '/joint_states', self.on_joint_states, 10, callback_group=group)
         self.arm_client = ActionClient(self, FollowJointTrajectory, '/arm_group_controller/follow_joint_trajectory',
                                        callback_group=group)
+        self.head_client = ActionClient(self, FollowJointTrajectory, '/head_controller/follow_joint_trajectory',
+                                        callback_group=group)
         self.create_subscription(LaserScan, '/scan', self.on_scan, qos_profile_sensor_data, callback_group=group)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
-        self.find_client = self.create_client(FindObjects, '/object_finder/find', callback_group=group)
+        self.find_client = self.create_client(FindObjects, find_service, callback_group=group)
         self.move_client = ActionClient(self, MoveGroup, '/move_action', callback_group=group)
         cancel = lambda _: CancelResponse.ACCEPT  # noqa: E731
         ActionServer(self, SearchObject, '~/search', self.execute_search, goal_callback=self.on_goal,
@@ -118,7 +129,10 @@ class BehaviorServer(Node):
         self.scan = msg
 
     def on_description(self, msg):
-        self.gaze = Gaze(msg.data, self.base_frame, self.camera_link, self.gaze_joints)
+        if self.view == 'head':
+            self.gaze = Gaze(msg.data, self.base_frame, self.head_camera_link, self.head_joints, optical=False)
+        else:
+            self.gaze = Gaze(msg.data, self.base_frame, self.camera_link, self.gaze_joints)
 
     def on_joint_states(self, msg):
         self.joints.update(zip(msg.name, msg.position))
@@ -158,18 +172,23 @@ class BehaviorServer(Node):
 
     def search(self, goal_handle, queries, color, feedback):
         """見つかれば(物体, 説明)、見つからなければ(None, 説明)を返す。"""
-        n = len(self.arm_joints)
-        poses = [self.search_poses[i:i + n] for i in range(0, len(self.search_poses), n)]
+        self.prepare_view()
+        if self.view == 'head':
+            values, joints = self.head_search_poses, self.head_joints
+        else:
+            values, joints = self.search_poses, self.arm_joints
+        n = len(joints)
+        poses = [dict(zip(joints, values[i:i + n])) for i in range(0, len(values), n)]
         return self.look_through(goal_handle, poses, queries, color, feedback)
 
     def look_through(self, goal_handle, poses, queries, color, feedback):
         message = ''
         for pose in poses:
             self.check_cancel(goal_handle)
-            # 付け根(先頭の関節)は正の向きでカメラが右(base_linkの−y)を向く。
-            goal_handle.publish_feedback(feedback('looking', -pose[0]))
+            # 付け根・頭のパン(先頭の関節)は正の向きでカメラが右(base_linkの−y)を向く。
+            goal_handle.publish_feedback(feedback('looking', -next(iter(pose.values()))))
             try:
-                self.arm_to(pose)
+                self.view_to(pose)
             except Failed as e:
                 self.get_logger().warn(f'skip search pose {pose}: {e}')
                 continue
@@ -192,14 +211,13 @@ class BehaviorServer(Node):
         if self.sighting is None or self.gaze is None or time.time() - self.sighting[1] > self.sighting_max_age:
             return None
         target = self.sighting[0]
-        pose = dict(zip(self.arm_joints, self.gaze_pose))
-        q, offset = self.gaze.solve(self.to_base(target, self.current_pose()), pose, pose,
-                                    limits=self.gaze_limits)
-        # 付け根と手首だけでは写せない向き(車体の後ろ等)なら見回しに任せる。
+        self.prepare_view()
+        q, offset = self.aim_with_offset(target, self.current_pose(), self.view_seed())
+        # 動かせる関節だけでは写せない向き(車体の後ろ等)なら見回しに任せる。
         if np.max(np.abs(offset)) > self.sighting_max_offset:
             return None
         try:
-            self.arm_to([q[n] for n in self.arm_joints])
+            self.view_to(q)
         except Failed as e:
             self.get_logger().warn(f'cannot look at the last sighting: {e}')
             return None
@@ -271,9 +289,9 @@ class BehaviorServer(Node):
         """カメラを物体へ向け続けながら、車軸の中点から見た物体がstandoffの位置・正面に来るまで動く。"""
         if self.gaze is None:
             raise Failed(ApproachObject.Result.DRIVE_FAILED, 'robot_description not received yet')
-        # 探す姿勢からカメラを物体へ向ける姿勢へは、車体やLiDARに当たらないようMoveItで移る。以降は少しずつ直接送る。
-        gaze = self.aim(tracker.target, self.current_pose(), dict(zip(self.arm_joints, self.gaze_pose)))
-        self.arm_to([gaze[n] for n in self.arm_joints])
+        # 探す姿勢からカメラを物体へ向ける姿勢へは、アームなら車体やLiDARに当たらないようMoveItで移る。以降は少しずつ直接送る。
+        gaze = self.aim(tracker.target, self.current_pose(), self.view_seed())
+        self.view_to(gaze)
         tracker.forget_until_now()
         start, traveled, deadline = self.current_pose(), 0.0, time.time() + self.approach_timeout
         previous, next_gaze, phase = start, 0.0, None
@@ -294,7 +312,7 @@ class BehaviorServer(Node):
             goal_handle.publish_feedback(fb('driving', remaining))
             if time.time() >= next_gaze:
                 gaze = self.aim(tracker.target, (x, y, yaw), gaze)
-                self.stream_arm(gaze)
+                self.stream_view(gaze)
                 next_gaze = time.time() + self.gaze_period
             if time.time() - tracker.last_seen > self.lost_timeout:
                 raise Failed(ApproachObject.Result.NOT_FOUND, 'lost the object while approaching')
@@ -330,20 +348,72 @@ class BehaviorServer(Node):
                 -math.sin(yaw) * (tx - x) + math.cos(yaw) * (ty - y), tz)
 
     def aim(self, target, pose, seed):
-        """odom上の物体へカメラの光軸を向ける腕の関節角度(付け根と手首だけを動かす)。"""
-        fixed = dict(zip(self.arm_joints, self.gaze_pose))
-        q, _ = self.gaze.solve(self.to_base(target, pose), fixed, seed,
-                               limits=self.gaze_limits)
-        return q
+        return self.aim_with_offset(target, pose, seed)[0]
 
-    def stream_arm(self, joints):
+    def aim_with_offset(self, target, pose, seed):
+        """odom上の物体へカメラの光軸を向ける関節角度と、残る画像上のずれ。
+        アームなら付け根と手首だけ、頭部ならパンとチルトを動かす。"""
+        if self.view == 'head':
+            return self.gaze.solve(self.to_base(target, pose), {}, seed)
+        fixed = dict(zip(self.arm_joints, self.gaze_pose))
+        return self.gaze.solve(self.to_base(target, pose), fixed, seed, limits=self.gaze_limits)
+
+    def view_seed(self):
+        if self.view == 'head':
+            return {n: self.joints.get(n, 0.0) for n in self.head_joints}
+        return dict(zip(self.arm_joints, self.gaze_pose))
+
+    def prepare_view(self):
+        """頭部カメラで見るときは、アームが写り込んで深度が抜けないよう横へよけておく。"""
+        if self.view != 'head':
+            return
+        current = [self.joints.get(n) for n in self.arm_joints]
+        if None not in current and max(abs(a - b) for a, b in zip(current, self.head_arm_pose)) < 0.05:
+            return
+        self.arm_to(self.head_arm_pose)
+
+    def view_to(self, joints):
+        if self.view == 'head':
+            self.head_to(joints)
+        else:
+            self.arm_to([joints[n] for n in self.arm_joints])
+
+    def stream_view(self, joints):
         # 前の目標は新しい目標で置き換わる(JTCが受け付けた時点で前の軌道を捨てる)ため、結果は待たない。
-        t = 2.0 * self.gaze_period
+        names = self.head_joints if self.view == 'head' else self.arm_joints
+        client = self.head_client if self.view == 'head' else self.arm_client
+        client.send_goal_async(self.trajectory(names, joints, 2.0 * self.gaze_period))
+
+    def trajectory(self, names, joints, seconds):
         goal = FollowJointTrajectory.Goal()
-        goal.trajectory.joint_names = list(self.arm_joints)
-        goal.trajectory.points = [JointTrajectoryPoint(positions=[float(joints[n]) for n in self.arm_joints],
-                                                       time_from_start=DurationMsg(sec=0, nanosec=int(t * 1e9)))]
-        self.arm_client.send_goal_async(goal)
+        goal.trajectory.joint_names = list(names)
+        sec = int(seconds)
+        goal.trajectory.points = [JointTrajectoryPoint(positions=[float(joints[n]) for n in names],
+                                                       time_from_start=DurationMsg(sec=sec, nanosec=int((seconds - sec) * 1e9)))]
+        return goal
+
+    def head_to(self, joints):
+        """頭部を指定の角度へ動かし、着くまで待つ。頭部はアームに当たらない範囲しか動かないため、MoveItを通さない。"""
+        if not self.head_client.wait_for_server(timeout_sec=5.0):
+            raise Failed(SearchObject.Result.FAILED, 'head controller is not available')
+        distance = max((abs(joints[n] - self.joints.get(n, 0.0)) for n in self.head_joints), default=0.0)
+        seconds = max(0.5, distance / self.head_speed)
+        done = threading.Event()
+        state = {}
+
+        def on_result(future):
+            state['result'] = future.result()
+            done.set()
+
+        def on_goal(future):
+            handle = future.result()
+            if not handle.accepted:
+                done.set()
+                return
+            handle.get_result_async().add_done_callback(on_result)
+        self.head_client.send_goal_async(self.trajectory(self.head_joints, joints, seconds)).add_done_callback(on_goal)
+        if not done.wait(seconds + 5.0) or 'result' not in state or state['result'].result.error_code != 0:
+            raise Failed(SearchObject.Result.FAILED, f'head move to {joints} failed')
 
     def to_odom(self, obj):
         """物体の位置を、撮った時刻の車体の位置でodomへ直す(画像の遅れの間に車体が動いてもずれない)。"""

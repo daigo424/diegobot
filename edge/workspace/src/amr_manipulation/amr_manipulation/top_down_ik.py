@@ -103,11 +103,14 @@ class TopDownIK(KinematicChain):
 
 
 class Gaze(KinematicChain):
-    """カメラの光軸(光学座標系のz)を指定点へ向ける関節角度を求める。動かす関節以外は呼び出し側の値で固定する。"""
+    """カメラの光軸を指定点へ向ける関節角度を求める。動かす関節以外は呼び出し側の値で固定する。
+    cameraは光学座標系(zが前)のフレーム。optical=Falseなら、xが前・yが左・zが上のフレームとして扱う。
+    """
 
-    def __init__(self, urdf, base, camera, moving_joints):
+    def __init__(self, urdf, base, camera, moving_joints, optical=True):
         super().__init__(urdf, base, camera)
         self.moving_joints = list(moving_joints)
+        self.optical = optical
 
     def solve(self, point, fixed, seed, margin=0.02, limits=None):
         """光軸からpointまでのずれ(画像上の正規化座標x, y)を最小にした関節角度と、そのずれを返す。
@@ -122,6 +125,8 @@ class Gaze(KinematicChain):
         def offset(x):
             q = dict(fixed, **dict(zip(self.moving_joints, x)))
             p = np.linalg.inv(self.fk(q)) @ point
+            if not self.optical:
+                p = np.array([-p[1], -p[2], p[0]])
             # 点がカメラの後ろにあっても滑らかに前へ戻せるよう、奥行きは正の小さな値で下から抑える。
             return np.array([p[0], p[1]]) / max(p[2], 0.05)
 

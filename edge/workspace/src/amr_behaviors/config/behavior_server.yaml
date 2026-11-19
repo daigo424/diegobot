@@ -1,6 +1,18 @@
 behavior_server:
   ros__parameters:
     arm_joints: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll]
+    # 探す・物を見続けるカメラ(head: 頭部カメラ、wrist: 手首カメラ)。つかむ・置くは、manipulatorが手首カメラで行う。
+    view_camera: head
+    # 頭部で探すときの(パン, チルト)。チルトは床の近くから遠くまでが1枚に入る角度で、パンは横の画角が少し重なる刻み。
+    head_search_poses: [0.0, -0.45,
+                        -0.8, -0.45,
+                        0.8, -0.45,
+                        -1.5, -0.45,
+                        1.5, -0.45]
+    # 頭部で見る間のアームの姿勢。手前にあると深度が抜けるため、待機の姿勢のまま付け根を左へよける。
+    head_arm_pose: [-0.6, -1.65, 1.4, 0.8519, -1.5708]
+    head_speed: 1.0  # rad/s
+    # 以下のsearch_poses・gaze_*は手首カメラで探す・見続けるとき(view_camera: wrist)の設定。
     # 探すときの姿勢(5関節ずつ、この順に見る)。standbyの肩・肘・手首で、付け根を振って見る(隣の姿勢とカメラの写る
     # 範囲が少し重なる刻み)。床を見下ろす姿勢を足しても、写る範囲はほとんど広がらない。
     search_poses: [0.0, -1.65, 1.4, 0.8519, -1.5708,

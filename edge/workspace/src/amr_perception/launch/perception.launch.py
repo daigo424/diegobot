@@ -62,6 +62,19 @@ def generate_launch_description():
         ],
     )
 
+    # 頭部カメラ(Gemini 335L)用。深度はカメラの中でカラーに合わせてあるため、手首カメラと同じ処理で使える。
+    head_object_finder = Node(
+        package='amr_perception',
+        executable='object_finder',
+        name='head_object_finder',
+        output='both',
+        remappings=[
+            ('color/image/compressed', '/head_camera/color/image_raw/compressed'),
+            ('depth/image/compressed', '/head_camera/depth/image_raw/compressed'),
+            ('color/camera_info', '/head_camera/color/camera_info'),
+        ],
+    )
+
     # 名前で指定された物を、object_finderの候補からVLMに選ばせる。VLMのAPIキーは環境変数ANTHROPIC_API_KEYで渡す。
     object_resolver = Node(
         package='amr_perception',
@@ -69,4 +82,5 @@ def generate_launch_description():
         output='both',
     )
 
-    return LaunchDescription([detector, model, container, object_detector, object_finder, object_resolver])
+    return LaunchDescription([detector, model, container, object_detector, object_finder, head_object_finder,
+                              object_resolver])
