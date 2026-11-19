@@ -35,15 +35,13 @@ behavior_server:
     sighting_max_offset: 0.2
     lost_timeout: 3.0  # s
     approach_timeout: 90.0  # s
-    # ESP32のモーターは指令をそのままPWMの比率にし速度制御が無いため、実際の速さは指令より遅く、
-    # 遅い指令ではほぼ動かない。
-    turn_speed: 1.0  # rad/s
-    min_turn_speed: 0.7  # rad/s
+    turn_speed: 0.5  # rad/s
+    min_turn_speed: 0.15  # rad/s
     # 物体の向きのずれがこれより大きければその場で回り、小さければ前進しながら向きを直す。
     turn_in_place_angle: 0.2  # rad
     yaw_tolerance: 0.05  # rad
-    drive_speed: 0.16  # m/s
-    min_drive_speed: 0.11  # m/s
+    drive_speed: 0.10  # m/s
+    min_drive_speed: 0.03  # m/s
     steer_gain: 1.5
     distance_tolerance: 0.015  # m
     # 前進中、車体の前端(front_x)からstop_distance以内、幅half_width以内にLiDARの点があれば止まる。
