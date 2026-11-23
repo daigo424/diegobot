@@ -9,6 +9,8 @@
     <node pkg="controller_manager" exec="spawner"
           args="joint_state_broadcaster arm_group_controller grip_group_controller head_controller" />
 
+    <node pkg="controller_manager" exec="spawner" args="arm_teleop_controller --inactive" />
+
     <!-- 電源オフ中に垂れた腕はURDFの可動範囲外にあり、MoveItが計画を拒否するため、起動したらstandbyへ戻す。 -->
     <node pkg="amr_bringup" exec="move_arm_to_standby.py" output="screen">
         <param from="$(find-pkg-share amr_bringup)/config/arm_standby.yaml" />

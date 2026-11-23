@@ -28,6 +28,7 @@ LIDAR_FRONT_RIGHT_ATTACHED ?= $(if $(filter-out -,$(HOST_LIDAR_FRONT_RIGHT_PORT)
 LIDAR_REAR_LEFT_ATTACHED   ?= $(if $(filter-out -,$(HOST_LIDAR_REAR_LEFT_PORT)),1,0)
 MICRO_ROS_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_MICRO_ROS_PORT)
 ARM_ATTACHED       ?= $(call _HOST_DEVICE_EXISTS,HOST_ARM_PORT)
+LEADER_ARM_ATTACHED ?= $(call _HOST_DEVICE_EXISTS,HOST_LEADER_ARM_PORT)
 # HP60CとGemini 335Lは機体ごとに変わるパスが無いため、USBのベンダー/プロダクトIDで判定する。
 HP60C_ATTACHED     ?= $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell lsusb -d 3482:6723 >/dev/null 2>&1 && echo 1 || echo 0),0)
 GEMINI_ATTACHED    ?= $(if $(filter 1,$(ROBOT_ATTACHED)),$(shell lsusb -d 2bc5:0804 >/dev/null 2>&1 && echo 1 || echo 0),0)
@@ -35,6 +36,7 @@ LIDAR_FRONT_RIGHT_COMPOSE_FILE := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED))
 LIDAR_REAR_LEFT_COMPOSE_FILE   := $(if $(filter 1,$(LIDAR_REAR_LEFT_ATTACHED)),edge/docker/docker-compose.lidar-rear-left-attached.yml,)
 MICRO_ROS_COMPOSE_FILE := $(if $(filter 1,$(MICRO_ROS_ATTACHED)),edge/docker/docker-compose.micro-ros-attached.yml,)
 ARM_COMPOSE_FILE       := $(if $(filter 1,$(ARM_ATTACHED)),edge/docker/docker-compose.arm-attached.yml,)
+LEADER_ARM_COMPOSE_FILE := $(if $(filter 1,$(LEADER_ARM_ATTACHED)),edge/docker/docker-compose.leader-arm-attached.yml,)
 HP60C_COMPOSE_FILE     := $(if $(filter 1,$(HP60C_ATTACHED)),edge/docker/docker-compose.hp60c-attached.yml,)
 GEMINI_COMPOSE_FILE    := $(if $(filter 1,$(GEMINI_ATTACHED)),edge/docker/docker-compose.gemini-attached.yml,)
 BASE_COMPOSE_FILE      := $(if $(filter 1,$(LIDAR_FRONT_RIGHT_ATTACHED) $(LIDAR_REAR_LEFT_ATTACHED) $(MICRO_ROS_ATTACHED) $(ARM_ATTACHED) $(HP60C_ATTACHED) $(GEMINI_ATTACHED)),edge/docker/docker-compose.base.yml,)
@@ -46,7 +48,7 @@ else
 PERCEPTION_COMPOSE_FILE := edge/docker/docker-compose.perception.yml
 endif
 
-COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(LIDAR_FRONT_RIGHT_COMPOSE_FILE),-f $(LIDAR_FRONT_RIGHT_COMPOSE_FILE)) $(if $(LIDAR_REAR_LEFT_COMPOSE_FILE),-f $(LIDAR_REAR_LEFT_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) $(if $(HP60C_COMPOSE_FILE),-f $(HP60C_COMPOSE_FILE)) $(if $(GEMINI_COMPOSE_FILE),-f $(GEMINI_COMPOSE_FILE)) $(if $(BASE_COMPOSE_FILE),-f $(BASE_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
+COMPOSE            := docker compose -f edge/docker/docker-compose.yml $(if $(GPU_COMPOSE_FILE),-f $(GPU_COMPOSE_FILE)) $(if $(PERCEPTION_COMPOSE_FILE),-f $(PERCEPTION_COMPOSE_FILE)) $(if $(LIDAR_FRONT_RIGHT_COMPOSE_FILE),-f $(LIDAR_FRONT_RIGHT_COMPOSE_FILE)) $(if $(LIDAR_REAR_LEFT_COMPOSE_FILE),-f $(LIDAR_REAR_LEFT_COMPOSE_FILE)) $(if $(MICRO_ROS_COMPOSE_FILE),-f $(MICRO_ROS_COMPOSE_FILE)) $(if $(ARM_COMPOSE_FILE),-f $(ARM_COMPOSE_FILE)) $(if $(LEADER_ARM_COMPOSE_FILE),-f $(LEADER_ARM_COMPOSE_FILE)) $(if $(HP60C_COMPOSE_FILE),-f $(HP60C_COMPOSE_FILE)) $(if $(GEMINI_COMPOSE_FILE),-f $(GEMINI_COMPOSE_FILE)) $(if $(BASE_COMPOSE_FILE),-f $(BASE_COMPOSE_FILE)) -p $(COMPOSE_PJ_NAME)
 RUN                := $(COMPOSE) run --rm --remove-orphans
 EXEC               := $(COMPOSE) exec
 ROS2_SERVICE       := diegobot
@@ -59,7 +61,7 @@ PKG                ?=
 PKG_NAME           := $(if $(PKG),$(notdir $(PKG)),)
 # サーバー側でだけ動かすパッケージ。ラズパイではビルド・依存導入の対象から外す
 # (edge/docker/Dockerfileのrosdep段にも同じ除外がある)。
-SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation amr_behaviors amr_robot_tools
+SERVER_PKGS        := amr_perception amr_moveit_config amr_manipulation amr_behaviors amr_robot_tools amr_teleop
 PI_WS_SRC_PATHS    := $(patsubst edge/workspace/%,%,$(filter-out $(addprefix edge/workspace/src/,$(SERVER_PKGS)),$(wildcard edge/workspace/src/*)))
 ifeq ($(UNAME_M),$(filter $(UNAME_M),aarch64 arm64))
 WS_SRC_PATHS       := $(PI_WS_SRC_PATHS)
@@ -80,6 +82,11 @@ CMD_ROS2_WS_SOURCE := test -f $(ROS2_WS)/install/setup.bash && source $(ROS2_WS)
 up:
 	@test -f $(EDGE_ENV) || cp $(EDGE_ENV).example $(EDGE_ENV)
 	$(COMPOSE) --env-file $(EDGE_ENV) up -d
+	$(MAKE) install-packages
+
+up-debug:
+	@test -f $(EDGE_ENV) || cp $(EDGE_ENV).example $(EDGE_ENV)
+	$(COMPOSE) --env-file $(EDGE_ENV) up
 	$(MAKE) install-packages
 
 # カメラ・LiDAR・Picoのいずれも未接続な開発機から、ラズパイ実機のtopicをrviz2等で
@@ -120,6 +127,37 @@ perception:
 # 物を探すため、先にmake perceptionも起動しておく。
 manipulation:
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_manipulation manipulation.launch.py $(if $(RVIZ),use_rviz:=true)"
+
+# 開発機に挿したSO-101のリーダーアームで実機のアームを動かす。Ctrl+CでMoveIt用のコントローラに戻す。
+# 先にcheck_armで、止まっている実機のハードウェアとコントローラを動く状態に戻す。
+teleop:
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop check_arm && ros2 launch amr_teleop leader_teleop.launch.py"
+
+# テレオペをエピソードごとに/data/vla/raw/<DATASET>へ記録する(Enterで開始/保存)。TASKは学習に使う指示文。
+# 記録を始める前に頭部をHEAD_POSE(パン,チルト[rad])に動かす。HEAD_POSE=を空にすると、その時点の向き(make adjust-head-cameraで合わせた向き)のまま使う。
+DATASET   ?= test
+TASK      ?=
+HEAD_POSE ?= 0.0,-0.78
+record-vla:
+	$(if $(TASK),,$(error TASK に学習に使う指示文を渡してください(例: make record-vla TASK="Pick up the block")))
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
+
+# 実機の頭部(パン・チルト)をスライダーで動かす。
+adjust-head-camera:
+	$(MAKE) colcon CMD_RUN="ros2 run amr_teleop head_slider"
+
+# 学習したポリシーで実機のアームを動かす(Enterで開始/停止)。LeRobot(torch)がROSのコンテナに無いため、
+# 推論サーバーは開発機のPython(VLA_PYTHON)で動かし、コンテナのpolicy_runnerがTCPで使う。
+VLA_PYTHON ?= $(HOME)/.platformio/penv/bin/python
+POLICY     ?= data/vla/train/act_pick_block/checkpoints/last/pretrained_model
+# 推論の出し方を変える引数(例: POLICY_ARGS="--temporal-ensemble 0.01"、"--n-action-steps 10")。
+POLICY_ARGS ?=
+run-policy:
+	@$(VLA_PYTHON) server/vla/policy_server.py $(POLICY) $(POLICY_ARGS) & server=$$!; \
+	trap "kill $$server 2>/dev/null" EXIT INT TERM; \
+	$(VLA_PYTHON) -c "import socket,sys,time; end=time.time()+120; ok=lambda: socket.socket().connect_ex(('127.0.0.1',5555))==0; \
+	[time.sleep(1) for _ in iter(lambda: ok() or time.time()>end, True)]; sys.exit(0 if ok() else 'policy server did not start')" && \
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop check_arm && ros2 run amr_teleop policy_runner $(if $(TASK),--ros-args -p task:='$(TASK)')"
 
 # manipulationに加え、探す・近づくアクション(/behavior_server/search, /behavior_server/approach)を出す。
 # 車体が動くため、周りに物が無い床で使う。先にmake perceptionも起動しておく。
@@ -180,35 +218,25 @@ install-packages:
 vendor-import:
 	$(EXEC) $(ROS2_SERVICE) bash -c "cd $(ROS2_WS) && vcs import src < vendor.repos"
 
-launch-urdf-display:
-	$(MAKE) colcon CMD_RUN="ros2 launch urdf_tutorial display.launch.py model:=/workspace/src/amr_description/urdf/$(FILENAME)"
-
 rqt-graph:
 	$(MAKE) colcon CMD_RUN="rqt_graph"
+# 頭部と手首のカラー画像だけを見る。view-robotは深度も購読し、ラズパイに深度の圧縮と送信をさせてしまう。
+HEAD_IMAGE_TOPIC  ?= /head_camera/color/image_raw/compressed
+WRIST_IMAGE_TOPIC ?= /camera/camera/color/image_raw/compressed
+view-cameras:
+	$(MAKE) colcon CMD_RUN="{ ros2 run rqt_image_view rqt_image_view $(HEAD_IMAGE_TOPIC) & ros2 run rqt_image_view rqt_image_view $(WRIST_IMAGE_TOPIC); wait; }"
 # ロボットのモデルとTFを、スライダーで関節を動かしながらRVizで見る。偽の/joint_statesと/tfを出すため、
-# 実機の通信に混ざらないよう別のROS_DOMAIN_IDで起動する。
-MODEL_VIEW_DOMAIN_ID ?= 99
-view-model:
-	$(EXEC) -e ROS_DOMAIN_ID=$(MODEL_VIEW_DOMAIN_ID) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_description display.launch.xml"
+# 実機の通信に混ざらないよう別のROS_DOMAIN_IDで起動する。URDF=<urdf/内のファイル名>で部品だけも見られる。
+URDF_VIEW_DOMAIN_ID ?= 99
+URDF ?= amr.urdf.xacro
+view-urdf:
+	$(EXEC) -e ROS_DOMAIN_ID=$(URDF_VIEW_DOMAIN_ID) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 launch amr_description display.launch.xml model:=$(URDF)"
 
-use-controller:
-	$(MAKE) colcon CMD_RUN="ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel -p stamped:=true"
-
-# シミュレーションのSO101の関節角[rad]。J1〜J6はshoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripperの順。
-J1 ?= 0.0
-J2 ?= 0.0
-J3 ?= 0.0
-J4 ?= 0.0
-J5 ?= 0.0
-J6 ?= 0.0
-pub-arm-joints:
-	$(MAKE) colcon CMD_RUN="ros2 topic pub -1 /arm_controller/commands std_msgs/msg/Float64MultiArray '{data: [$(J1), $(J2), $(J3), $(J4), $(J5), $(J6)]}'"
-tf-tree-pdf:
-	$(MAKE) colcon CMD_RUN="ros2 run tf2_tools view_frames"
 tf-tree:
 	$(MAKE) colcon CMD_RUN="ros2 run rqt_tf_tree rqt_tf_tree"
+# 実機はTwistの/cmd_velで走る。SIM=1のときはGazeboのdiff_drive_controllerへTwistStampedで送る。
 teleop-twist-keyboard:
-	$(MAKE) colcon CMD_RUN="ros2 run teleop_twist_keyboard teleop_twist_keyboard"
+	$(MAKE) colcon CMD_RUN="ros2 run teleop_twist_keyboard teleop_twist_keyboard $(if $(SIM),--ros-args -r /cmd_vel:=/diff_drive_controller/cmd_vel -p stamped:=true)"
 PI_HOST ?= diegobot.local
 PI_USER ?= daigo
 pi-rsync:
@@ -229,6 +257,9 @@ pi-ssh:
 	ssh $(PI_USER)@$(PI_HOST)
 pi-diagnose:
 	ssh $(PI_USER)@$(PI_HOST) bash -s < edge/provisioning/scripts/pi-diagnose.sh
+# 手首カメラ(HP60C)はUSBが一度抜けると、挿し直ってもドライバがつなぎ直さないため、コンテナごと起動し直す。
+pi-restart-wrist-camera:
+	ssh $(PI_USER)@$(PI_HOST) docker restart diegobot_hp60c
 # 初回のラズパイにはmakeが無いことがあるため、ラズパイ上ではなく開発機からssh越しに実行する。
 # -tはsudoのパスワード入力用。
 pi-setup:

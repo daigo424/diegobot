@@ -1,0 +1,7 @@
+# テレオペ用のSO-101リーダーアームのサーボバスを、開発機のdiegobotコンテナへ渡す。
+services:
+  diegobot:
+    devices:
+      - "${HOST_LEADER_ARM_PORT}:/dev/ttyLeaderArm"
+    group_add:
+      - dialout

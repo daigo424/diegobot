@@ -1,0 +1,15 @@
+leader_teleop:
+  ros__parameters:
+    port: /dev/ttyLeaderArm
+    joints: [shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, gripper]
+    servo_ids: [1, 2, 3, 4, 5, 6]
+    # リーダーをURDFの0点姿勢(グリッパーは完全に閉じた状態)にした時のサーボの生値。
+    # 回す向きは6関節とも実機のアームと同じ。
+    zero_raw: [2085, 3172, 1946, 1001, 2052, 2030]
+    # zero_rawの姿勢に対応する関節角。グリッパーは閉じた位置を実機の閉じる角度に合わせる。
+    zero_angle: [0.0, 0.0, 0.0, 0.0, 0.0, -0.1745]
+    rate: 50.0
+    sync_velocity: 0.5
+    max_velocity: 3.0
+    sync_tolerance: 0.05
+    stale_timeout: 0.2
