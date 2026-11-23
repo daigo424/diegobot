@@ -4,14 +4,15 @@
   <xacro:property name="namespace" value="$(arg namespace)"/>
 
   <!-- カメラマウントの取付位置と姿勢 -->
-  <xacro:property name="camera_mount_xyz" value="-0.001 0.045 -0.044"/>
-  <!-- 姿勢は、実機の深度で見た床がTF上の床と重なるよう補正した値 -->
-  <xacro:property name="camera_mount_rpy" value="${radians(-86.81)} ${radians(-3.51)} ${radians(91.03)}"/>
+  <xacro:property name="camera_mount_xyz" value="-0.003 0.045 -0.045"/>
+  <xacro:property name="camera_mount_rpy" value="${radians(-88.81)} ${radians(-0.51)} ${radians(91.03)}"/>
 
-  <!-- カメラの取付位置と姿勢。USBケーブルが当たらないよう上下逆さに付けている(画像はnuwa_hp60c.launch.pyで回して戻す)。
-       板の穴の位置から求めた値を、深度で見た床がTF上の床と重なるよう補正している。 -->
-  <xacro:property name="camera_xyz" value="0.0083 -0.0111 0.0180"/>
-  <xacro:property name="camera_rpy" value="${radians(-95.29)} ${radians(3.26)} ${radians(113.16)}"/>
+  <!-- マウントに対するカメラの位置と姿勢はCADの\とおり。ただしUSBケーブルが当たらないよう、2つのネジ穴の中点を軸に上下逆さに付けている(画像はnuwa_hp60c.launch.pyで回して戻す)。 -->
+  <xacro:property name="camera_xyz" value="-0.0009 -0.0051 0.0177"/>
+  <xacro:property name="camera_rpy" value="${radians(-90.91)} ${radians(0.07)} ${radians(114.88)}"/>
+  <!-- 深度で見た床がTF上の床と重なるよう、画像を出すフレームだけをずらす補正。見た目(マウント・本体)はCADのまま置く -->
+  <xacro:property name="camera_calib_xyz" value="-0.0109 0.0022 -0.0043"/>
+  <xacro:property name="camera_calib_rpy" value="${radians(-5.1)} ${radians(4.73)} ${radians(1.45)}"/>
   <!-- STLは腕に付く部分が少し傾いた座標で書き出されているため、腕に付く部分が上の取付位置に来るよう戻す。 -->
   <xacro:property name="camera_mount_mesh_xyz" value="0 0.0008 0"/>
   <xacro:property name="camera_mount_mesh_rpy" value="${radians(2.17)} 0 0"/>
@@ -60,11 +61,18 @@
     </collision>
   </link>
 
+  <joint name="${namespace}hp60c_calib_joint" type="fixed">
+    <origin xyz="${camera_calib_xyz}" rpy="${camera_calib_rpy}"/>
+    <parent link="${namespace}hp60c_link"/>
+    <child link="${namespace}hp60c_calib_link"/>
+  </joint>
+  <link name="${namespace}hp60c_calib_link"/>
+
   <!-- ドライバ(ascamera)は画像・点群をこのフレームの子(camera_color_0等)としてTFを出すため、名前を合わせる。
        名前はノードの名前空間とカメラ番号から決まる(名前空間camera、0番)。光学座標系(Z=奥行き,X=右,Y=下)。 -->
   <joint name="${namespace}hp60c_optical_joint" type="fixed">
     <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
-    <parent link="${namespace}hp60c_link"/>
+    <parent link="${namespace}hp60c_calib_link"/>
     <child link="${namespace}camera_camera_link_0"/>
   </joint>
   <link name="${namespace}camera_camera_link_0"/>
@@ -72,7 +80,7 @@
   <!-- カメラを上下逆さにした向き。シミュレーターのカメラはここに付け、実機の画像を回して戻したものと同じ向きで出す。 -->
   <joint name="${namespace}hp60c_upright_joint" type="fixed">
     <origin xyz="0 0 0" rpy="${pi} 0 0"/>
-    <parent link="${namespace}hp60c_link"/>
+    <parent link="${namespace}hp60c_calib_link"/>
     <child link="${namespace}hp60c_upright_link"/>
   </joint>
   <link name="${namespace}hp60c_upright_link"/>
