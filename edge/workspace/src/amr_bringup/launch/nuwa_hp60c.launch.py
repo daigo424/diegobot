@@ -16,12 +16,19 @@ PREFIX = f'/{NAMESPACE}/{NODE_NAME}'
 COLOR_IMAGE = f'{PREFIX}/color/image_raw'
 DEPTH_IMAGE = f'{PREFIX}/depth/image_raw'
 # ascamera_nodeは見つけた順に末尾の番号を振るため、最初に見つかったカメラ(0)を前提にする。
+# カメラを上下逆さに付けているため、画像はrotate_imageで回してから決まったトピック名で出す。
 ASCAMERA_REMAPPINGS = [
-    (f'{PREFIX}/rgb0/image', COLOR_IMAGE),
-    (f'{PREFIX}/rgb0/camera_info', f'{PREFIX}/color/camera_info'),
-    (f'{PREFIX}/depth0/image_raw', DEPTH_IMAGE),
-    (f'{PREFIX}/depth0/camera_info', f'{PREFIX}/depth/camera_info'),
     (f'{PREFIX}/depth0/points', f'{PREFIX}/depth/points'),
+]
+ROTATE_REMAPPINGS = [
+    ('color/image_in', f'{PREFIX}/rgb0/image'),
+    ('color/camera_info_in', f'{PREFIX}/rgb0/camera_info'),
+    ('color/image', COLOR_IMAGE),
+    ('color/camera_info', f'{PREFIX}/color/camera_info'),
+    ('depth/image_in', f'{PREFIX}/depth0/image_raw'),
+    ('depth/camera_info_in', f'{PREFIX}/depth0/camera_info'),
+    ('depth/image', DEPTH_IMAGE),
+    ('depth/camera_info', f'{PREFIX}/depth/camera_info'),
 ]
 
 
@@ -81,13 +88,21 @@ def generate_launch_description():
 
     # republisherは購読者がいる間だけ入力を購読するため、使わないトピックのためにカメラの配信が始まることはない。
     # use_intra_process_commsは有効にしない(有効だとRepublisherが購読者0になっても入力の購読を止めないことがある)。
+    # 回すのと圧縮するのが1つのスレッドを取り合うと、カメラの15fpsに追いつかないため、複数スレッドで回す。
     extras_container = ComposableNodeContainer(
         name='camera_extras_container',
         namespace=NAMESPACE,
         package='rclcpp_components',
-        executable='component_container',
+        executable='component_container_mt',
         output='both',
         composable_node_descriptions=[
+            ComposableNode(
+                package='amr_bringup',
+                plugin='amr_bringup::RotateImage',
+                name='rotate_image',
+                namespace=NAMESPACE,
+                remappings=ROTATE_REMAPPINGS,
+            ),
             republisher('color_compressed', COLOR_IMAGE, 'compressed'),
             republisher('color_theora', COLOR_IMAGE, 'theora'),
             # 深度は16UC1でJPEG(既定)に変換できないため、16bitを保てるPNGにする。

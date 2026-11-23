@@ -5,10 +5,10 @@
 
   <!-- 実機はRGB 640x480に深度を位置合わせして使うため、その状態の画角(H64.4°×V51.7°)と測距範囲(0.2〜4m)に合わせる -->
   <!-- https://www.yahboom.net/study/hp60c -->
-  <gazebo reference="${namespace}hp60c_link">
+  <gazebo reference="${namespace}hp60c_upright_link">
     <sensor name="hp60c" type="rgbd_camera">
       <!-- 既定のフレーム名はGazebo内のスコープ付き名になり、TFに存在しない。 -->
-      <gz_frame_id>${namespace}camera_camera_link_0</gz_frame_id>
+      <gz_frame_id>${namespace}camera_camera_link_0_upright</gz_frame_id>
       <camera>
         <horizontal_fov>1.124</horizontal_fov>
         <image>

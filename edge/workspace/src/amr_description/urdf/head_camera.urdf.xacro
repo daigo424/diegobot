@@ -5,8 +5,8 @@
 
   <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは、ドライバーが深度の原点にする左の赤外線カメラのレンズで、
        前面の中央から左へ、手首カメラと同じ物を見た位置が合うようずらしている。 -->
-  <xacro:property name="head_camera_mesh_xyz" value="0.1461 -0.0146 0.0000"/>
-  <xacro:property name="head_camera_link_xyz" value="0.1483 0.0174 0.0010"/>
+  <xacro:property name="head_camera_mesh_xyz" value="0.0872 -0.0146 0.0000"/>
+  <xacro:property name="head_camera_link_xyz" value="0.0894 0.0174 0.0010"/>
   <!-- 姿勢は、深度で見た床がTF上の床と重なるよう補正した値 -->
   <xacro:property name="head_camera_link_rpy" value="${radians(-1.06)} ${radians(0.11)} 0"/>
 
@@ -99,12 +99,12 @@
       <material name="dark"/>
     </visual>
     <collision>
-      <origin xyz="0.0681 -0.0146 0" rpy="0 0 0"/>
+      <origin xyz="0.0387 -0.0146 0" rpy="0 0 0"/>
       <geometry>
-        <box size="0.1604 0.1240 0.0290"/>
+        <box size="0.1015 0.1240 0.0290"/>
       </geometry>
     </collision>
-    <xacro:box_inertial mass="0.15" xyz="0.0681 -0.0146 0" x="0.1604" y="0.1240" z="0.0290"/>
+    <xacro:box_inertial mass="0.15" xyz="0.0387 -0.0146 0" x="0.1015" y="0.1240" z="0.0290"/>
   </link>
 
   <!-- ドライバ(orbbec_camera)は画像のフレーム(head_camera_color_frame等)をこのフレームの子としてTFに出す。
