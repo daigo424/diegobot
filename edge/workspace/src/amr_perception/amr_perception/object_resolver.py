@@ -4,6 +4,7 @@ import math
 import os
 import re
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -135,6 +136,7 @@ class ObjectResolver(Node):
         self.verify = p('verify', False).value
         self.effort = p('effort', 'low').value
         self.find_timeout = p('find_timeout', 15.0).value
+        self.find_attempts = p('find_attempts', 3).value
         self.odom_frame = p('odom_frame', 'odom').value
         model = p('model', 'claude-sonnet-5-5').value
         timeout = p('vlm_timeout', 30.0).value
@@ -210,6 +212,7 @@ class ObjectResolver(Node):
             verdict = parse_verdict(self.chooser(single.tobytes(), VERIFY_PROMPT.format(name=name), self.effort))
             self.get_logger().info(f'verification of candidate {answer}: {verdict}')
         others = [o for o in candidates if o.crop_px < self.min_crop_px]
+        response.checked = visible
         if answer is None:
             response.error_code, response.message = ResolveObject.Response.FAILED, 'the model gave no valid number'
         elif verdict in ('合わない', None) and self.verify and answer > 0:
@@ -232,11 +235,19 @@ class ObjectResolver(Node):
         if not self.find_client.wait_for_service(timeout_sec=2.0):
             return None
         targets = [f'{color} {q}'.strip() for q in queries]
-        done = threading.Event()
-        future = self.find_client.call_async(
-            FindObjects.Request(queries=targets, min_score=float(self.min_score), want_mask=True))
-        future.add_done_callback(lambda _: done.set())
-        return future.result() if done.wait(self.find_timeout) else None
+        found = None
+        # ラズパイの負荷で画像が遅れて届くと、object_finderは古いとして断るため、少し待って撮り直す。
+        for attempt in range(self.find_attempts):
+            if attempt:
+                time.sleep(0.5)
+            done = threading.Event()
+            future = self.find_client.call_async(
+                FindObjects.Request(queries=targets, min_score=float(self.min_score), want_mask=True))
+            future.add_done_callback(lambda _: done.set())
+            found = future.result() if done.wait(self.find_timeout) else None
+            if found is not None and found.success:
+                break
+        return found
 
     def select(self, objects, color, exclude):
         """位置が分かり、大きさが対象らしく、除外の位置から離れた候補を、確信度の高い順に上限まで残す。"""

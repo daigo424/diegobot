@@ -102,6 +102,75 @@ class TopDownIK(KinematicChain):
         return None if best is None else best[1]
 
 
+class SideGraspIK(KinematicChain):
+    """道具点を指定位置へ、横に近い向き(指を前へ向け、左右から挟む向き)で置く関節角度を求める。
+
+    5関節のため、道具の向き(z軸)を向けられるのは付け根の鉛直軸を通る縦の面の中だけ。道具点が指の間で軸から横にずれて
+    いるため、水平の向きは付け根から物への向きからmax_yawまでずれてよいとし、水平から下へ傾ける角度だけを浅い方から
+    順に試す。閉じる向き(x軸)は水平にする。
+    """
+
+    def __init__(self, urdf, base, tip, tcp_offset=(0.0, 0.0, 0.0), up_axis=None, max_yaw=np.radians(25)):
+        super().__init__(urdf, base, tip)
+        self.tcp = np.append(np.asarray(tcp_offset, dtype=float), 1.0)
+        # 閉じる向きを水平にするひねりは上下逆の2通りあるため、道具のこの軸が上を向く方に決める(手首カメラを上にする)。
+        self.up_axis = None if up_axis is None else np.asarray(up_axis, dtype=float)
+        self.max_yaw = max_yaw
+        m = np.eye(4)
+        for fixed, name, _ in self.steps:
+            m = m @ fixed
+            if name is not None:
+                break
+        self.pan_origin = m[:2, 3].copy()
+
+    def direction(self, position, pitch):
+        """付け根から物へまっすぐ向いた、水平からpitchだけ下へ傾いた向き。"""
+        r = np.asarray(position[:2], dtype=float) - self.pan_origin
+        r /= np.linalg.norm(r)
+        return np.array([np.cos(pitch) * r[0], np.cos(pitch) * r[1], -np.sin(pitch)])
+
+    def solve(self, position, pitches, seeds, direction=None, margin=0.02, tolerance=0.003,
+              max_angle=np.radians(3)):
+        """(関節角度, 傾き[rad], 道具の向き)を返す。届かなければNone。directionを渡すと、道具の向きをそれに固定する
+        (差し込む・持ち上げる間に向きを変えないため)。"""
+        position = np.asarray(position, dtype=float)
+        lo = np.array([self.lower[n] + margin for n in self.joint_names])
+        hi = np.array([self.upper[n] - margin for n in self.joint_names])
+        flipped = [dict(s, **{self.joint_names[-1]: s[self.joint_names[-1]] + sign * np.pi})
+                   for s in seeds for sign in (1.0, -1.0)]
+        for pitch in pitches:
+            radial = self.direction(position, pitch)
+
+            def residual(x):
+                m = self.fk(dict(zip(self.joint_names, x)))
+                z = m[:3, 2]
+                aim = 0.1 * (z - direction) if direction is not None else [0.1 * (z[2] + np.sin(pitch))]
+                return np.concatenate([(m @ self.tcp)[:3] - position, aim, [0.1 * m[2, 0]]])
+
+            best = None
+            for seed in list(seeds) + flipped:
+                x0 = np.clip([seed[n] for n in self.joint_names], lo, hi)
+                sol = least_squares(residual, x0, bounds=(lo, hi))
+                q = dict(zip(self.joint_names, sol.x))
+                m = self.fk(q)
+                z = m[:3, 2]
+                error = np.linalg.norm((m @ self.tcp)[:3] - position)
+                if direction is not None:
+                    aimed = np.arccos(np.clip(z @ direction, -1.0, 1.0)) <= max_angle
+                else:
+                    tilt = abs(np.arcsin(np.clip(-z[2], -1.0, 1.0)) - pitch) <= max_angle
+                    yaw = np.arccos(np.clip(z[:2] @ radial[:2] / (np.linalg.norm(z[:2]) * np.linalg.norm(radial[:2])),
+                                            -1.0, 1.0))
+                    aimed = tilt and yaw <= self.max_yaw
+                upright = self.up_axis is None or (m[:3, :3] @ self.up_axis)[2] > 0.5
+                if error <= tolerance and aimed and abs(m[2, 0]) <= np.sin(max_angle) and upright \
+                        and (best is None or error < best[0]):
+                    best = (error, q, z.copy())
+            if best is not None:
+                return best[1], pitch, best[2]
+        return None
+
+
 class Gaze(KinematicChain):
     """カメラの光軸を指定点へ向ける関節角度を求める。動かす関節以外は呼び出し側の値で固定する。
     cameraは光学座標系(zが前)のフレーム。optical=Falseなら、xが前・yが左・zが上のフレームとして扱う。
@@ -148,10 +217,12 @@ class ViewPose(KinematicChain):
         self.moving_joints = [n for n in self.joint_names if n not in self.fixed]
 
     def solve(self, bottom, height, radius, seeds, image_size, focal, angles, distance=0.3,
-              min_distance=0.2, max_distance=0.5, floor_z=0.0, clearance=0.03, fill=0.8, margin=0.02, limits=None):
+              min_distance=0.2, max_distance=0.5, floor_z=0.0, clearance=0.03, fill=0.8, margin=0.02, limits=None,
+              accept=None):
         """床(floor_z)に置かれた、底面の中心bottom・高さheight・半径radiusの物を見る関節角度と見下ろす角度を返す。
         解けなければ(None, None)。image_sizeは(幅, 高さ)[px]、focalは(fx, fy)[px]、anglesは試す見下ろす角度[rad]。
-        limitsは関節名→(下限, 上限)で、URDFの範囲より狭めたい関節(腕を前へ伸ばしすぎると肩が支えきれない等)に使う。"""
+        limitsは関節名→(下限, 上限)で、URDFの範囲より狭めたい関節(腕を前へ伸ばしすぎると肩が支えきれない等)に使う。
+        acceptは関節角度を受けて使えるかを返す関数で、車体とのぶつかりの判定などを足すのに使う。"""
         bottom = np.asarray(bottom, dtype=float)
         center = bottom + [0.0, 0.0, height / 2.0]
         limits = limits or {}
@@ -179,7 +250,7 @@ class ViewPose(KinematicChain):
                 sol = least_squares(residual, x0, bounds=(lo, hi))
                 q = joints(sol.x)
                 if self._usable(q, center, corners, half, focal, angle, min_distance, max_distance,
-                                floor_z + clearance):
+                                floor_z + clearance) and (accept is None or accept(q)):
                     return q, angle
         return None, None
 

@@ -23,3 +23,5 @@ string message
 DetectedObject object
 # NO_MATCH・TOO_FARのとき、まだ確かめていない候補(近づく先の候補)
 DetectedObject[] candidates
+# VLMに見せて確かめた候補(NO_MATCHのときは、どれも対象ではなかった)
+DetectedObject[] checked

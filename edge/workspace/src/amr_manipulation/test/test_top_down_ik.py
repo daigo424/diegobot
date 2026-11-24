@@ -75,3 +75,28 @@ def test_view_pose_gives_up_when_the_object_cannot_fit():
     q, angle = view.solve((0.3, 0.0, 0.0), 0.5, 0.2, [{'pan': 0.0, 'lift': 0.5, 'elbow': 1.0, 'wrist': 0.5}],
                           (640, 480), (600.0, 600.0), np.radians([10, 30]), distance=0.2, max_distance=0.3)
     assert q is None and angle is None
+
+
+def test_side_grasp_points_the_tool_away_from_the_pan_axis():
+    from amr_manipulation.top_down_ik import SideGraspIK
+    ik = SideGraspIK(ARM, 'base', 'tip')
+    seeds = [{'pan': 0.0, 'lift': 1.0, 'elbow': 0.5, 'wrist': -1.0, 'roll': 0.0},
+             {'pan': 0.0, 'lift': 0.5, 'elbow': 1.0, 'wrist': 0.0, 'roll': 1.5}]
+    target = [0.25, 0.05, 0.08]
+    found = ik.solve(target, np.radians([0, 10, 20, 30, 45]), seeds)
+    assert found is not None
+    q, pitch, direction = found
+    m = ik.fk(q)
+    assert m[:3, 3] == pytest.approx(target, abs=0.003)
+    assert m[:3, 2] == pytest.approx(direction, abs=1e-6)
+    assert np.arcsin(-direction[2]) == pytest.approx(pitch, abs=np.radians(3))
+    assert abs(m[2, 0]) < 0.06
+    fixed = ik.solve(np.asarray(target) - 0.03 * direction, [pitch], seeds + [q], direction=direction)
+    assert fixed is not None and ik.fk(fixed[0])[:3, 2] @ direction == pytest.approx(1.0, abs=2e-3)
+
+
+def test_side_grasp_out_of_reach():
+    from amr_manipulation.top_down_ik import SideGraspIK
+    ik = SideGraspIK(ARM, 'base', 'tip')
+    assert ik.solve([0.6, 0.0, 0.05], np.radians([0, 10, 20]), [{'pan': 0.0, 'lift': 1.0, 'elbow': 0.5,
+                                                                 'wrist': -1.0, 'roll': 0.0}]) is None

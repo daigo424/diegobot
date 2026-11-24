@@ -1,15 +1,21 @@
 # 探す対象。PickObjectと同じく英語の短い名詞句(言い換えを並べてよい)と、色(空なら問わない)。
 string[] queries
 string color
+# 名前で指定された物(ユーザーの言葉のまま)。空でなければ色で絞らず、見つけた候補を見分けずに返す(遠くて見分けられないため)。
+string target_name
 ---
 uint8 SUCCESS=0
 uint8 NOT_FOUND=1
 uint8 FAILED=2
 uint8 CANCELED=3
+# target_nameのとき、候補はあるが、この距離では見分けられない(近づけば見分ける)
+uint8 FOUND_UNIDENTIFIED=4
 uint8 error_code
 string message
 # 見つけた物体。位置は見つけた時点のbase_link基準(その後に車体が動いていなければ使える)。
 DetectedObject object
+# FOUND_UNIDENTIFIEDのとき、見つけた候補
+DetectedObject[] candidates
 ---
 # 今の段階(looking)と、見ている向き(base_linkの前方からの角度[rad]、左が正)
 string stage

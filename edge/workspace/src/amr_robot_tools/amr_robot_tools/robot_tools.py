@@ -1,10 +1,12 @@
 import math
 import os
 import threading
+import time
 
 import rclpy
 import uvicorn
 from amr_interfaces.action import ApproachObject, PickObject, PlaceObject, SearchObject
+from amr_interfaces.msg import DetectedObject
 from amr_manipulation.ros_util import send
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.openapi.docs import get_redoc_html
@@ -21,11 +23,16 @@ QUERIES_DESCRIPTION = (
 COLOR_DESCRIPTION = (
     'Color name to filter by, or empty for any color. One of: red, orange, yellow, green, cyan, blue, purple, '
     'pink, white, gray, black.')
+TARGET_NAME_DESCRIPTION = (
+    "A specific object named in the user's own words, without translating (e.g. a character name). Leave empty "
+    'for a generic object. When set, put broad categories in queries (e.g. ["figurine", "toy figure"]); the robot '
+    'identifies the object by appearance and ignores color.')
 
 
 class Target(BaseModel):
     queries: list[str] = Field(..., description=QUERIES_DESCRIPTION)
     color: str = Field('', description=COLOR_DESCRIPTION)
+    target_name: str = Field('', description=TARGET_NAME_DESCRIPTION)
 
 
 class PlaceRequest(BaseModel):
@@ -46,6 +53,8 @@ class ActionResult(BaseModel):
     status: str = Field(..., description='Result code, e.g. SUCCESS, NOT_FOUND, OUT_OF_REACH.')
     message: str
     object: ObjectInfo | None = None
+    candidate_count: int | None = Field(None, description='Number of candidates not identified yet (with '
+                                                          'FOUND_UNIDENTIFIED or NO_MATCH).')
 
 
 class State(BaseModel):
@@ -61,18 +70,41 @@ def code_name(result_type, code):
     return names.get(code, str(code))
 
 
-def object_info(obj):
+def object_info(obj, with_color=True):
     if obj is None or not obj.position_valid:
         return None
     p = obj.position.point
-    return ObjectInfo(label=obj.label, color=obj.color, score=round(obj.score, 2),
+    # 色は物の画素の多数決で、名前で指定した物の見た目の説明には使えないため、色で探したときだけ返す。
+    return ObjectInfo(label=obj.label, color=obj.color if with_color else '', score=round(obj.score, 2),
                       distance_m=round(math.hypot(p.x, p.y), 2), direction_deg=round(math.degrees(math.atan2(p.y, p.x))))
+
+
+class TargetMemory:
+    """近づく動作が見分けて測った対象(odom基準)を、次のつかむ動作まで持っておく。
+    別の物へ向かった後で前の物を渡さないよう、つかむ以外の動作を始めたときと、時間が経ったときに捨てる。"""
+
+    def __init__(self, lifetime):
+        self.lifetime = lifetime
+        self.kept = None
+
+    def keep(self, obj):
+        self.kept = (obj, time.monotonic())
+
+    def drop(self):
+        self.kept = None
+
+    def take(self):
+        kept, self.kept = self.kept, None
+        if kept is None or time.monotonic() - kept[1] > self.lifetime:
+            return None
+        return kept[0]
 
 
 class RobotToolsNode(Node):
     def __init__(self):
         super().__init__('robot_tools')
         self.timeout = self.declare_parameter('action_timeout', 300.0).value
+        self.target = TargetMemory(self.declare_parameter('target_lifetime', 120.0).value)
         group = ReentrantCallbackGroup()
         self.action_clients = {
             'search': ActionClient(self, SearchObject, '/behavior_server/search', callback_group=group),
@@ -92,12 +124,11 @@ class RobotToolsNode(Node):
         try:
             result = send(self.action_clients[name], goal, self.timeout)
             if result is None:
-                status, message, obj = 'NO_RESPONSE', f'{name} did not answer (is the server running?)', None
+                status, message = 'NO_RESPONSE', f'{name} did not answer (is the server running?)'
             else:
-                status = code_name(action_type.Result, result.error_code)
-                message, obj = result.message, getattr(result, 'object', None)
+                status, message = code_name(action_type.Result, result.error_code), result.message
             self.last_action, self.last_status = name, status
-            return status, message, obj
+            return status, message, result
         finally:
             self.lock.release()
 
@@ -126,37 +157,51 @@ def create_app(node, api_key):
         if api_key and (credentials is None or credentials.credentials != api_key):
             raise HTTPException(status_code=401, detail='invalid api key')
 
-    def reply(status, message, obj):
-        return ActionResult(success=status == 'SUCCESS', status=status, message=message, object=object_info(obj))
+    def reply(status, message, result, with_color=True):
+        candidates = getattr(result, 'candidates', None)
+        return ActionResult(success=status == 'SUCCESS', status=status, message=message,
+                            object=object_info(getattr(result, 'object', None), with_color),
+                            candidate_count=len(candidates) if candidates else None)
 
     @app.post('/search', response_model=ActionResult, operation_id='search', dependencies=[Depends(authorize)],
-              summary='Look around for an object without driving toward it.')
+              summary='Look around for an object without driving toward it. With target_name, returns '
+                      'FOUND_UNIDENTIFIED when there are candidates too far to identify; call approach next.')
     def search(req: Target):
-        goal = SearchObject.Goal(queries=req.queries, color=req.color)
-        return reply(*node.run('search', SearchObject, goal))
+        node.target.drop()
+        goal = SearchObject.Goal(queries=req.queries, color=req.color, target_name=req.target_name)
+        return reply(*node.run('search', SearchObject, goal), with_color=not req.target_name)
 
     @app.post('/approach', response_model=ActionResult, operation_id='approach', dependencies=[Depends(authorize)],
-              summary='Find an object and drive to it, stopping where the arm can reach it.')
+              summary='Find an object and drive to it, stopping where the arm can reach it. With target_name, '
+                      'it visits the candidates one by one; NO_MATCH means none of them was the named object.')
     def approach(req: Target):
-        goal = ApproachObject.Goal(queries=req.queries, color=req.color, standoff=0.0)
-        return reply(*node.run('approach', ApproachObject, goal))
+        node.target.drop()
+        goal = ApproachObject.Goal(queries=req.queries, color=req.color, standoff=0.0, target_name=req.target_name)
+        status, message, result = node.run('approach', ApproachObject, goal)
+        if status == 'SUCCESS' and result.object_odom.position.header.frame_id:
+            node.target.keep(result.object_odom)
+        return reply(status, message, result, with_color=not req.target_name)
 
     @app.post('/pick', response_model=ActionResult, operation_id='pick', dependencies=[Depends(authorize)],
               summary='Pick up an object that is within reach in front of the robot. If it returns OUT_OF_REACH, '
                       'call approach first.')
     def pick(req: Target):
-        status, message, obj = node.run('pick', PickObject, PickObject.Goal(queries=req.queries, color=req.color))
+        target = node.target.take()
+        goal = PickObject.Goal(queries=req.queries, color=req.color, target_name=req.target_name,
+                               target_object=target or DetectedObject())
+        status, message, result = node.run('pick', PickObject, goal)
         if status == 'SUCCESS':
-            node.holding, node.held = True, object_info(obj)
-        return reply(status, message, obj)
+            node.holding, node.held = True, object_info(result.object, not req.target_name)
+        return reply(status, message, result, with_color=not req.target_name)
 
     @app.post('/place', response_model=ActionResult, operation_id='place', dependencies=[Depends(authorize)],
               summary='Put down the object being held on the floor in front of the robot, or just release it.')
     def place(req: PlaceRequest):
-        status, message, obj = node.run('place', PlaceObject, PlaceObject.Goal(release_here=req.release_here))
+        node.target.drop()
+        status, message, result = node.run('place', PlaceObject, PlaceObject.Goal(release_here=req.release_here))
         if status in ('SUCCESS', 'NOT_HOLDING'):
             node.holding, node.held = False, None
-        return reply(status, message, obj)
+        return reply(status, message, result)
 
     @app.get('/state', response_model=State, operation_id='get_state', dependencies=[Depends(authorize)],
              summary='Get what the robot is holding and the result of the last action.')

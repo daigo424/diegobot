@@ -3,6 +3,11 @@
 string[] queries
 # 色で絞り込む(DetectedObjectのcolorと同じ名前)。空なら色を問わない。
 string color
+# 名前で指定された物(ユーザーの言葉のまま)。空でなければ色で絞らない。
+string target_name
+# 近づく動作が見分けて測った対象(odom基準)。あれば、今の検出のうちこの位置に一番近い物をつかむ。
+# 無ければ(frame_idが空なら)、target_nameをその場で見分ける。
+DetectedObject target_object
 ---
 uint8 SUCCESS=0
 uint8 NOT_FOUND=1

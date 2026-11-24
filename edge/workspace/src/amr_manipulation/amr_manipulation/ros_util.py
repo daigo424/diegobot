@@ -1,7 +1,7 @@
 import threading
 import time
 
-from amr_interfaces.srv import FindObjects
+from amr_interfaces.srv import FindObjects, ResolveObject
 from moveit_msgs.action import MoveGroup
 from moveit_msgs.msg import Constraints, JointConstraint, MoveItErrorCodes
 
@@ -50,7 +50,7 @@ def move_joints(move_client, group, names, joints, velocity_scaling, timeout=60.
     return res.error_code.val if res else MoveItErrorCodes.FAILURE
 
 
-def find_objects(find_client, queries, color, attempts, min_score=0.0):
+def find_objects(find_client, queries, color, attempts, min_score=0.0, timeout=15.0):
     """object_finderで探し、深度のある物を色で絞ってスコア順に返す。(objects, message)。"""
     # YOLOEは色の語があると物の種類の確信度が上がる一方、色の違う物も拾うため、色は判定結果でも絞る。
     targets = [f'{color} {q}'.strip() for q in queries if q.strip()]
@@ -60,7 +60,7 @@ def find_objects(find_client, queries, color, attempts, min_score=0.0):
     for i in range(attempts):
         if i:
             time.sleep(0.5)
-        response = call(find_client, FindObjects.Request(queries=targets, min_score=float(min_score)), 15.0)
+        response = call(find_client, FindObjects.Request(queries=targets, min_score=float(min_score)), timeout)
         if response is None:
             continue
         if not response.success:
@@ -72,3 +72,9 @@ def find_objects(find_client, queries, color, attempts, min_score=0.0):
         if objects:
             return objects, ''
     return [], message
+
+
+def resolve_object(resolve_client, target_name, queries, exclude, timeout=60.0):
+    """object_resolverで名前の物を見分ける。応答が無ければNone。VLMの応答と1回のやり直しを待てるよう、待ち時間は長めにする。"""
+    return call(resolve_client, ResolveObject.Request(target_name=target_name, queries=list(queries),
+                                                      exclude=list(exclude)), timeout)

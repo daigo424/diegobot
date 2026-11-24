@@ -3,15 +3,27 @@ string[] queries
 string color
 # 止まる位置(物体までのbase_linkから前の距離[m])。0なら既定値(つかめる位置)。
 float32 standoff
+# 名前で指定された物(ユーザーの言葉のまま)。空でなければ、候補に1つずつ近づいて見分け、違えば次の候補へ移る。
+string target_name
+# 既に対象ではないと分かった候補の位置(odom)。
+geometry_msgs/Point[] exclude
 ---
 uint8 SUCCESS=0
 uint8 NOT_FOUND=1
 uint8 DRIVE_FAILED=2
 uint8 CANCELED=3
+# target_nameのとき、候補を全部確かめたが、どれも対象ではなかった
+uint8 NO_MATCH=4
+# target_nameのとき、VLMが見分けられなかった(写りが悪い・候補が似ている)
+uint8 AMBIGUOUS=5
 uint8 error_code
 string message
 # 止まった後に測り直した物体。位置はbase_link基準。
 DetectedObject object
+# objectと同じ物を、位置・OBBともodom基準にしたもの。つかむまでの間に車体が動いても使える。
+DetectedObject object_odom
+# NO_MATCHのとき、まだ確かめていない候補
+DetectedObject[] candidates
 ---
 # 今の段階(looking, turning, driving)と、物体までの残りの距離[m]
 string stage
