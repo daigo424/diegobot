@@ -29,6 +29,8 @@ class DepthWatchdog(Node):
         self.min_camera_height = self.declare_parameter('min_camera_height', 0.27).value
         # 画像の下側には近すぎて深度の出ないグリッパーの指が常に写るため、上からこの割合の行だけで数える。
         self.check_rows = self.declare_parameter('check_rows', 0.5).value
+        # 上下逆さに付けたカメラの回す前の画像を見るとき、上側(遠く)は画像の下側に写る。
+        self.upside_down = self.declare_parameter('upside_down', False).value
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.started = time.monotonic()
@@ -57,7 +59,8 @@ class DepthWatchdog(Node):
             self.bad_since = None
             return
         rows = max(1, int(msg.height * self.check_rows))
-        top = np.frombuffer(msg.data, np.uint16, count=rows * msg.step // 2)
+        image = np.frombuffer(msg.data, np.uint16).reshape(msg.height, msg.step // 2)
+        top = image[-rows:] if self.upside_down else image[:rows]
         ratio = float(np.count_nonzero(top)) / top.size
         if ratio >= self.min_valid_ratio:
             if self.bad_since is not None:

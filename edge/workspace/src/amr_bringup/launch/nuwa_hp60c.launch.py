@@ -113,11 +113,15 @@ def generate_launch_description():
 
     # カメラが深度の大きく抜けた状態から戻らなくなることがあり、ドライバを開き直すと直る。見張りが終了したら
     # launchごと止め、コンテナの再起動(restart: unless-stopped)でカメラを開き直す。
+    # 見張りは回す前の深度を見る。回した深度を購読すると、誰も深度を使っていない間もラズパイで回し続けることになり、
+    # 同じラズパイで動くアームのドライバの周期が乱れるため。
     depth_watchdog = Node(
         namespace=f'{NAMESPACE}/{NODE_NAME}',
         package='amr_bringup',
         executable='depth_watchdog.py',
         output='both',
+        parameters=[{'upside_down': True}],
+        remappings=[('depth/image_raw', f'{PREFIX}/depth0/image_raw')],
     )
     reopen_on_watchdog_exit = RegisterEventHandler(OnProcessExit(
         target_action=depth_watchdog,
