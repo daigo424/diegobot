@@ -1,0 +1,20 @@
+# object_resolverが、VLMで見分けた物の見た目(埋め込み)と答えを覚えておくデータベース。
+# Difyのデータベースとは分ける(Difyの作り直しや版上げに巻き込まれないため)。
+services:
+  object_db:
+    image: pgvector/pgvector:0.8.1-pg17
+    container_name: diegobot_object_db
+    environment:
+      POSTGRES_DB: objects
+      POSTGRES_USER: diegobot
+      POSTGRES_PASSWORD: ${OBJECT_DB_PASSWORD:?set OBJECT_DB_PASSWORD in edge/.env}
+    ports:
+      # 開発機の中からだけ使う。Difyのデータベースと番号をずらす。
+      - 127.0.0.1:5433:5432
+    volumes:
+      - object_db_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+
+volumes:
+  object_db_data:

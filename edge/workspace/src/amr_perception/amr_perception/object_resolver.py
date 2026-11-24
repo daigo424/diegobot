@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import rclpy
 from amr_interfaces.srv import FindObjects, ResolveObject
+from amr_perception.object_cache import Embedder, ObjectCache, decide
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
@@ -47,6 +48,19 @@ def crop_square(image, obj, margin):
     sx0, sy0, sx1, sy1 = max(x0, 0), max(y0, 0), min(x1, w), min(y1, h)
     if sx1 > sx0 and sy1 > sy0:
         out[sy0 - y0:sy1 - y0, sx0 - x0:sx1 - x0] = image[sy0:sy1, sx0:sx1]
+    return out
+
+
+def masked_crop(image, obj, margin):
+    """crop_squareと同じ切り出しで、物の外(マスクの外)を灰色にする。床の木目など背景が似ていると、別の物でも
+    埋め込みが近くなるため、物だけを比べる。マスクが無ければ背景ごと切り出す。"""
+    crop = crop_square(image, obj, margin)
+    if not obj.mask.data or obj.mask.height != image.shape[0] or obj.mask.width != image.shape[1]:
+        return crop
+    mask = np.frombuffer(bytes(obj.mask.data), np.uint8).reshape(obj.mask.height, obj.mask.step)[:, :obj.mask.width]
+    inside = crop_square(np.repeat(mask[:, :, None], 3, axis=2), obj, margin)[:, :, 0] > 0
+    out = np.full_like(crop, 128)
+    out[inside] = crop[inside]
     return out
 
 
@@ -114,7 +128,7 @@ class AnthropicChooser:
 
 
 class ObjectResolver(Node):
-    def __init__(self, chooser=None):
+    def __init__(self, chooser=None, cache=None, embedder=None):
         super().__init__('object_resolver')
         p = self.declare_parameter
         # 評価のため、見分けに関わる値はサービスが呼ばれるたびにパラメータから読み直す(ros2 param setで変えられる)。
@@ -142,6 +156,26 @@ class ObjectResolver(Node):
         timeout = p('vlm_timeout', 30.0).value
 
         self.chooser = chooser
+        # trueなら、一度VLMで見分けた物は、2回目以降は覚えた見た目でVLMを呼ばずに当てる(起動時に決め、使わないときは
+        # 埋め込みのモデルも読み込まない)。
+        self.use_cache = p('use_cache', False).value
+        self.cache_threshold = p('cache_threshold', 0.8).value
+        self.cache_margin = p('cache_margin', 0.1).value
+        self.cache_min_crop_px = p('cache_min_crop_px', 60.0).value
+        self.cache, self.embedder = cache, embedder
+        if self.cache is None and self.use_cache and os.environ.get('OBJECT_DB_URL'):
+            try:
+                embedding_model = p('embedding_model', 'dinov2_vits14').value
+                self.embedder = Embedder(embedding_model,
+                                         cache_dir=p('models_dir', '/data/models').value + '/torch_hub')
+                # 物の外を塗りつぶして作った埋め込みは、背景込みの埋め込みとは比べない。
+                self.cache = ObjectCache(os.environ['OBJECT_DB_URL'], embedding_model + '+mask',
+                                         p('cache_image_dir', '/data/object_cache').value)
+            except Exception as e:  # キャッシュが使えなくても、VLMでの見分けは続ける
+                self.get_logger().warn(f'object cache is disabled: {e}')
+                self.cache = self.embedder = None
+        elif self.cache is None and self.use_cache:
+            self.get_logger().info('OBJECT_DB_URL is not set; the object cache is disabled')
         if self.chooser is None and os.environ.get('ANTHROPIC_API_KEY'):
             self.chooser = AnthropicChooser(model, timeout)
         if self.chooser is None:
@@ -167,7 +201,8 @@ class ObjectResolver(Node):
 
     def resolve(self, request, response):
         for name in ('default_queries', 'min_score', 'max_candidates', 'max_size', 'min_crop_px', 'exclude_radius',
-                     'use_color', 'tile_px', 'crop_margin', 'prompt_style', 'verify', 'effort'):
+                     'use_color', 'tile_px', 'crop_margin', 'prompt_style', 'verify', 'effort', 'use_cache',
+                     'cache_threshold', 'cache_margin', 'cache_min_crop_px'):
             setattr(self, name, self.get_parameter(name).value)
         name = request.target_name.strip()
         queries = [q for q in request.queries if q.strip()] or list(self.default_queries)
@@ -189,11 +224,17 @@ class ObjectResolver(Node):
             response.error_code, response.candidates = ResolveObject.Response.TOO_FAR, candidates
             response.message = f'{len(candidates)} candidate(s), too small to identify'
             return response
+        image = cv2.imdecode(np.frombuffer(found.image.data, np.uint8), cv2.IMREAD_COLOR)
+        others = [o for o in candidates if o.crop_px < self.min_crop_px]
+        response.checked = visible
+        crops = [crop_square(image, o, self.crop_margin) for o in visible]
+        embeddings = self.embed([masked_crop(image, o, self.crop_margin) for o in visible])
+        if embeddings is not None and self.answer_from_cache(name, visible, embeddings, others, response):
+            return response
         if self.chooser is None:
             response.error_code, response.message = ResolveObject.Response.FAILED, 'ANTHROPIC_API_KEY is not set'
             return response
 
-        image = cv2.imdecode(np.frombuffer(found.image.data, np.uint8), cv2.IMREAD_COLOR)
         grid = make_grid(image, visible, self.tile_px, self.crop_margin)
         self.publish_grid(found.image.header, grid)
         ok, jpeg = cv2.imencode('.jpg', grid, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -211,8 +252,8 @@ class ObjectResolver(Node):
             ok, single = cv2.imencode('.jpg', tile, [cv2.IMWRITE_JPEG_QUALITY, 90])
             verdict = parse_verdict(self.chooser(single.tobytes(), VERIFY_PROMPT.format(name=name), self.effort))
             self.get_logger().info(f'verification of candidate {answer}: {verdict}')
-        others = [o for o in candidates if o.crop_px < self.min_crop_px]
-        response.checked = visible
+        if embeddings is not None and answer is not None and answer >= 0 and verdict in (None, '合う'):
+            self.remember(name, visible, embeddings, crops, answer)
         if answer is None:
             response.error_code, response.message = ResolveObject.Response.FAILED, 'the model gave no valid number'
         elif verdict in ('合わない', None) and self.verify and answer > 0:
@@ -230,6 +271,42 @@ class ObjectResolver(Node):
             response.error_code, response.object = ResolveObject.Response.SUCCESS, visible[answer - 1]
             response.message = f'"{name}" is candidate {answer} of {len(visible)}'
         return response
+
+    def embed(self, crops):
+        """キャッシュを使うときだけ切り出しの埋め込みを返す(使わない・使えなければNone)。"""
+        if not self.use_cache or self.cache is None or self.embedder is None:
+            return None
+        try:
+            return self.embedder(crops)
+        except Exception as e:  # 埋め込みに失敗しても、VLMで見分ける
+            self.get_logger().warn(f'cannot embed the candidates: {e}')
+            return None
+
+    def answer_from_cache(self, name, visible, embeddings, others, response):
+        """覚えている見た目だけで決められればresponseを埋めてTrue。小さく写った候補は埋め込みが当てにならないため比べない。"""
+        scores = [self.cache.lookup(name, e) if o.crop_px >= self.cache_min_crop_px else (0.0, 0.0)
+                  for o, e in zip(visible, embeddings)]
+        verdict, index = decide(scores, self.cache_threshold, self.cache_margin)
+        self.get_logger().info(f'cache for "{name}": {[(round(p, 2), round(n, 2)) for p, n in scores]} '
+                               f'(crop {[round(o.crop_px) for o in visible]} px) -> {verdict}')
+        if verdict == 'match':
+            response.error_code, response.object = ResolveObject.Response.SUCCESS, visible[index]
+            response.message = f'"{name}" is candidate {index + 1} of {len(visible)} (remembered)'
+            return True
+        if verdict == 'none':
+            response.error_code, response.candidates = ResolveObject.Response.NO_MATCH, others
+            response.message = f'none of {len(visible)} candidate(s) is "{name}" (remembered)'
+            return True
+        return False
+
+    def remember(self, name, visible, embeddings, crops, answer):
+        """VLMの答えを、見せた候補ごとに覚える(違った候補も覚え、次に同じ物を見せないで済むようにする)。"""
+        try:
+            for i, (obj, embedding, crop) in enumerate(zip(visible, embeddings, crops)):
+                if obj.crop_px >= self.cache_min_crop_px:
+                    self.cache.remember(name, embedding, crop, obj.crop_px, i == answer - 1)
+        except Exception as e:  # 覚えられなくても、今回の答えは返す
+            self.get_logger().warn(f'cannot remember the answer: {e}')
 
     def find(self, queries, color):
         if not self.find_client.wait_for_service(timeout_sec=2.0):

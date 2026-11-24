@@ -113,3 +113,49 @@ def test_verification_can_reject_the_choice(resolver):
     assert res.error_code == ResolveObject.Response.NO_MATCH
     answers.extend(['答え: 1', '判定: 合う'])
     assert run(node, [candidate(200, 240, 150)]).error_code == ResolveObject.Response.SUCCESS
+
+
+class FakeCache:
+    """名前ごとに(埋め込み, その物だったか)を覚え、内積で一番近いものを返す。"""
+
+    def __init__(self):
+        self.rows = []
+
+    def lookup(self, name, embedding):
+        sims = [(match, float(np.dot(e, embedding))) for n, e, match in self.rows if n == name]
+        return (max((s for m, s in sims if m), default=0.0), max((s for m, s in sims if not m), default=0.0))
+
+    def remember(self, name, embedding, crop, crop_px, match, source='vlm'):
+        self.rows.append((name, np.asarray(embedding), match))
+
+
+def test_decide_needs_a_single_clear_hit():
+    decide = pytest.importorskip('amr_perception.object_cache').decide
+    assert decide([(0.9, 0.2), (0.3, 0.1)], 0.8, 0.1) == ('match', 0)
+    assert decide([(0.9, 0.85), (0.3, 0.1)], 0.8, 0.1) == (None, None)
+    assert decide([(0.9, 0.1), (0.85, 0.1)], 0.8, 0.1) == (None, None)
+    assert decide([(0.1, 0.9), (0.2, 0.95)], 0.8, 0.1) == ('none', None)
+    assert decide([(0.1, 0.9), (0.0, 0.0)], 0.8, 0.1) == (None, None)
+
+
+def test_second_time_is_answered_from_the_cache_without_the_vlm():
+    rclpy.init()
+    answers = []
+    cache = FakeCache()
+    # 候補の位置(x)ごとに決まった見た目にする。
+    embed = lambda crops: np.eye(len(crops))  # noqa: E731
+    node = object_resolver.ObjectResolver(chooser=lambda jpeg, text, effort: answers.pop(0), cache=cache,
+                                          embedder=embed)
+    node.set_parameters([rclpy.parameter.Parameter('use_cache', value=True)])
+    try:
+        objects = [candidate(200, 240, 150), candidate(420, 240, 150)]
+        answers.append('2')
+        first = run(node, objects)
+        assert first.error_code == ResolveObject.Response.SUCCESS and not answers
+        assert [m for _, _, m in cache.rows] == [False, True]
+        second = run(node, objects)
+        assert second.error_code == ResolveObject.Response.SUCCESS
+        assert second.object.bbox.center.position.x == 420 and 'remembered' in second.message
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

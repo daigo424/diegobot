@@ -116,12 +116,15 @@ login:
 
 # サーバー側の処理(点群生成・物体検出)を起動する。ノード本体はdiegobotコンテナでcolcon buildしたものを使う。
 # object_resolver(名前で指定された物をVLMに選ばせる)が使うANTHROPIC_API_KEYは、起動のたびにedge/.envの値を渡す。
+# 見分けた物を覚えておくデータベース(server/object_db)も立ち上げ、その接続先を渡す。
 # DETECTOR=1で全フレームを推論し続けるobject_detectorも起動し、MODELでそのモデルを差し替えられる
 # (例: make perception DETECTOR=1 MODEL=yoloe-26s-seg-pf.engine)。
 DETECTOR ?=
 MODEL ?=
 perception:
-	@. ./$(EDGE_ENV) && $(EXEC) -e ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY" perception bash -c "source $(ROS_INSTALL_PREFIX)/setup.bash && source $(ROS2_WS)/install/local_setup.bash && ros2 launch amr_perception perception.launch.py $(if $(filter 1,$(DETECTOR)),detector:=true) $(if $(MODEL),model:=$(MODEL))"
+	@. ./$(EDGE_ENV) && export OBJECT_DB_PASSWORD && docker compose -f server/object_db/docker-compose.yml up -d --quiet-pull
+	@. ./$(EDGE_ENV) && $(EXEC) -e ANTHROPIC_API_KEY="$$ANTHROPIC_API_KEY" \
+	  -e OBJECT_DB_URL="postgresql://diegobot:$$OBJECT_DB_PASSWORD@127.0.0.1:5433/objects" perception bash -c "source $(ROS_INSTALL_PREFIX)/setup.bash && source $(ROS2_WS)/install/local_setup.bash && ros2 launch amr_perception perception.launch.py $(if $(filter 1,$(DETECTOR)),detector:=true) $(if $(MODEL),model:=$(MODEL))"
 
 # 実機のアームを開発機のMoveItで計画し、カメラで見つけた物をつかむ・置くアクション(/manipulator/pick, /manipulator/place)を出す。
 # 物を探すため、先にmake perceptionも起動しておく。
