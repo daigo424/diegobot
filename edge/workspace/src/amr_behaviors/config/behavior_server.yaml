@@ -11,6 +11,14 @@ behavior_server:
                         1.5, -0.45]
     # 頭部で見る間のアームの姿勢。手前にあると深度が抜けるため、待機の姿勢のまま付け根を左へよける。
     head_arm_pose: [-0.6, -1.65, 1.4, 0.8519, -1.5708]
+    # 頭部で見回して見つからないとき、よけたアームの向こう側に隠れた物を見るため、反対側へよける姿勢(これより右は頭部に当たる)。
+    head_arm_alt_pose: [0.5, -1.65, 1.4, 0.8519, -1.5708]
+    # 頭部カメラの画像でアームが隠す範囲を求めるリンク(URDFの見た目の形を使う)。見回すときは床の範囲を隠しにくい方へよけ、
+    # 近づく間に物がこの範囲に入って見えなくなったら、反対側へよけ直す。
+    shadow_links: [shoulder_link, upper_arm_link, lower_arm_link, wrist_link, gripper_link, moving_jaw_so101_v1_link,
+                   arm_camera_mount_link, hp60c_link]
+    shadow_roi_top: 0.2
+    shadow_margin_px: 15
     head_speed: 1.0  # rad/s
     # 以下のsearch_poses・gaze_*は手首カメラで探す・見続けるとき(view_camera: wrist)の設定。
     # 探すときの姿勢(5関節ずつ、この順に見る)。standbyの肩・肘・手首で、付け根を振って見る(隣の姿勢とカメラの写る

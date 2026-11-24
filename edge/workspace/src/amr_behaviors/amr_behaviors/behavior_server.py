@@ -3,13 +3,15 @@ import math
 import threading
 import time
 
+import cv2
 import numpy as np
 import rclpy
 from amr_interfaces.action import ApproachObject, SearchObject
 from amr_interfaces.srv import FindObjects, ResolveObject
 from amr_interfaces.msg import DetectedObject
 from amr_manipulation.ros_util import call, find_objects, move_joints, resolve_object
-from amr_manipulation.top_down_ik import Gaze, ViewPose
+from amr_manipulation.arm_shadow import ArmShadow
+from amr_manipulation.top_down_ik import Gaze, KinematicChain, ViewPose
 from builtin_interfaces.msg import Duration as DurationMsg
 from control_msgs.action import FollowJointTrajectory
 from geometry_msgs.msg import Point, Twist
@@ -29,6 +31,13 @@ from std_msgs.msg import String
 from tf2_ros import Buffer, TransformException, TransformListener
 from trajectory_msgs.msg import JointTrajectoryPoint
 import tf2_geometry_msgs  # noqa: F401  PointStamped・PoseStampedをBuffer.transformで変換できるよう登録する
+
+
+def quaternion_matrix(q):
+    x, y, z, w = q.x, q.y, q.z, q.w
+    return np.array([[1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)]])
 
 
 class Canceled(Exception):
@@ -107,6 +116,17 @@ class BehaviorServer(Node):
         self.head_camera_link = p('head_camera_link', 'head_camera_link').value
         self.head_search_poses = p('head_search_poses', [0.0, -0.45]).value
         self.head_arm_pose = p('head_arm_pose', [-0.6, -1.65, 1.4, 0.8519, -1.5708]).value
+        self.head_arm_alt_pose = p('head_arm_alt_pose', [0.5, -1.65, 1.4, 0.8519, -1.5708]).value
+        self.arm_aside = self.head_arm_pose
+        # 頭部カメラの画像のうち、アームに隠れると困る範囲(上からの割合。上の方は遠くの壁など)と、隠れる範囲の余白。
+        self.shadow_links = p('shadow_links', ['']).value
+        self.shadow_roi_top = p('shadow_roi_top', 0.2).value
+        self.shadow_margin_px = p('shadow_margin_px', 15).value
+        self.head_optical_frame = p('head_optical_frame', 'head_camera_color_optical_frame').value
+        self.shadow = None
+        self.head_chain = None
+        self.head_info = None
+        self.optical_from_head_link = None
         self.head_speed = p('head_speed', 1.0).value
         find_service = {'head': p('head_find_service', '/head_object_finder/find').value,
                         'wrist': p('wrist_find_service', '/object_finder/find').value}[self.view]
@@ -142,6 +162,8 @@ class BehaviorServer(Node):
         self.view_pose = None
         self.create_subscription(CameraInfo, p('wrist_camera_info', '/camera/camera/color/camera_info').value,
                                  self.on_wrist_info, 1, callback_group=group)
+        self.create_subscription(CameraInfo, p('head_camera_info', '/head_camera/color/camera_info').value,
+                                 lambda m: setattr(self, 'head_info', m), 1, callback_group=group)
         cancel = lambda _: CancelResponse.ACCEPT  # noqa: E731
         ActionServer(self, SearchObject, '~/search', self.execute_search, goal_callback=self.on_goal,
                      cancel_callback=cancel, callback_group=group)
@@ -158,6 +180,11 @@ class BehaviorServer(Node):
         self.wrist_info = msg
 
     def on_description(self, msg):
+        try:
+            self.shadow = ArmShadow(msg.data, self.base_frame, self.shadow_links)
+            self.head_chain = KinematicChain(msg.data, self.base_frame, self.head_camera_link)
+        except (ValueError, KeyError) as e:
+            self.get_logger().warn(f'cannot predict where the arm hides the head camera view: {e}')
         self.view_pose = ViewPose(msg.data, self.base_frame, self.camera_link, 'gripper_frame_link',
                                   {'wrist_roll': self.view_roll})
         if self.view == 'head':
@@ -180,6 +207,7 @@ class BehaviorServer(Node):
 
     def execute_search(self, goal_handle):
         req, result = goal_handle.request, SearchObject.Result()
+        self.arm_aside = self.head_arm_pose
         try:
             obj, message = self.search(goal_handle, req.queries, req.color,
                                        lambda stage, heading: SearchObject.Feedback(stage=stage, heading=heading))
@@ -208,6 +236,12 @@ class BehaviorServer(Node):
             obj, message = self.search(goal_handle, queries, color, lambda s, _: fb('looking'), exclude)
         else:
             self.get_logger().info('found the object again at the last sighting')
+        if obj is None and self.view == 'head' and self.arm_aside != self.head_arm_alt_pose:
+            # よけたアームの向こう側の物は頭部カメラから隠れるため、反対側へよけて見回し直す。見つかったら、
+            # 近づく間もその側へよけたままにする(戻すとまた隠れる)。
+            self.get_logger().info('nothing found; moving the arm to the other side and looking again')
+            self.arm_aside = self.head_arm_alt_pose
+            obj, message = self.search(goal_handle, queries, color, lambda s, _: fb('looking'), exclude)
         return (self.to_odom(obj) if obj is not None else None), message
 
     def identify(self, name, queries, target, exclude):
@@ -291,6 +325,9 @@ class BehaviorServer(Node):
             # 付け根・頭のパン(先頭の関節)は正の向きでカメラが右(base_linkの−y)を向く。
             goal_handle.publish_feedback(feedback('looking', -next(iter(pose.values()))))
             try:
+                if self.view == 'head':
+                    self.choose_aside(pose)
+                    self.prepare_view()
                 self.view_to(pose)
             except Failed as e:
                 self.get_logger().warn(f'skip search pose {pose}: {e}')
@@ -344,6 +381,7 @@ class BehaviorServer(Node):
     def execute_approach(self, goal_handle):
         req, result = goal_handle.request, ApproachObject.Result()
         standoff = req.standoff if req.standoff > 0.0 else self.standoff
+        self.arm_aside = self.head_arm_pose
         tracker = None
         try:
             fb = lambda stage, remaining=0.0: ApproachObject.Feedback(stage=stage, remaining=remaining)  # noqa: E731
@@ -463,6 +501,7 @@ class BehaviorServer(Node):
         tracker.forget_until_now()
         start, traveled, deadline = self.current_pose(), 0.0, time.time() + self.approach_timeout
         previous, next_gaze, phase = start, 0.0, None
+        moved_arm = False
         while True:
             self.check_cancel(goal_handle)
             if time.time() > deadline:
@@ -484,6 +523,16 @@ class BehaviorServer(Node):
                 self.stream_view(gaze)
                 next_gaze = time.time() + self.gaze_period
             if time.time() - tracker.last_seen > self.lost_timeout:
+                if self.view == 'head' and not moved_arm and self.hidden_by_arm(tracker.target):
+                    # 見失ったのではなく、よけたアームの陰に入った。反対側へよけ直して追い続ける。
+                    self.get_logger().info('the object is behind the arm; moving the arm to the other side')
+                    self.stop()
+                    self.arm_aside = self.head_arm_alt_pose if self.arm_aside == self.head_arm_pose \
+                        else self.head_arm_pose
+                    self.prepare_view()
+                    tracker.forget_until_now()
+                    moved_arm = True
+                    continue
                 raise Failed(ApproachObject.Result.NOT_FOUND, 'lost the object while approaching')
 
             arrived = abs(remaining) <= self.distance_tolerance and abs(heading) <= self.yaw_tolerance
@@ -532,14 +581,73 @@ class BehaviorServer(Node):
             return {n: self.joints.get(n, 0.0) for n in self.head_joints}
         return dict(zip(self.arm_joints, self.gaze_pose))
 
+    def arm_mask(self, arm, head):
+        """アームの関節角度arm(名前→角度)・頭部の関節角度headのとき、頭部カメラの画像でアームが隠す範囲と、
+        base→頭部カメラ(光学座標系)の変換。求められなければNone。"""
+        if self.shadow is None or self.head_chain is None or self.head_info is None:
+            return None
+        if self.optical_from_head_link is None:
+            try:
+                t = self.tf_buffer.lookup_transform(self.head_camera_link, self.head_optical_frame, Time(),
+                                                    timeout=Duration(seconds=0.5)).transform
+            except TransformException:
+                return None
+            m = np.eye(4)
+            m[:3, :3] = quaternion_matrix(t.rotation)
+            m[:3, 3] = [t.translation.x, t.translation.y, t.translation.z]
+            self.optical_from_head_link = m
+        base_from_optical = self.head_chain.fk({n: head.get(n, 0.0) for n in self.head_chain.joint_names}) \
+            @ self.optical_from_head_link
+        info = self.head_info
+        mask = self.shadow.mask(arm, np.linalg.inv(base_from_optical), np.reshape(info.k, (3, 3)),
+                                (info.width, info.height))
+        if self.shadow_margin_px > 0:
+            size = 2 * self.shadow_margin_px + 1
+            mask = cv2.dilate(mask, np.ones((size, size), np.uint8))
+        return mask, base_from_optical
+
+    def hidden_fraction(self, aside, head):
+        found = self.arm_mask(dict(zip(self.arm_joints, aside)), head)
+        if found is None:
+            return None
+        mask = found[0]
+        return float(np.mean(mask[int(mask.shape[0] * self.shadow_roi_top):] > 0))
+
+    def choose_aside(self, head):
+        """頭部をheadに向けたとき、床の範囲を隠しにくい方へアームをよける。"""
+        options = [self.head_arm_pose, self.head_arm_alt_pose]
+        hidden = [self.hidden_fraction(a, head) for a in options]
+        if None in hidden:
+            return
+        current = hidden[options.index(self.arm_aside)]
+        # 動かすのにも時間がかかるため、はっきり減るときだけ替える。
+        if min(hidden) < current - 0.03:
+            self.get_logger().info(f'moving the arm aside to the other side (hides {min(hidden):.0%} instead of '
+                                   f'{current:.0%} of the head camera view)')
+            self.arm_aside = options[int(np.argmin(hidden))]
+
+    def hidden_by_arm(self, target):
+        """odom上のtargetが、今のアームの陰で頭部カメラから見えないか。"""
+        head = {n: self.joints.get(n, 0.0) for n in self.head_joints}
+        found = self.arm_mask({n: self.joints.get(n, 0.0) for n in self.arm_joints}, head)
+        if found is None:
+            return False
+        mask, base_from_optical = found
+        p = np.linalg.inv(base_from_optical) @ np.append(self.to_base(target, self.current_pose()), 1.0)
+        if p[2] <= 0.05:
+            return False
+        uv = np.reshape(self.head_info.k, (3, 3)) @ (p[:3] / p[2])
+        u, v = int(uv[0]), int(uv[1])
+        return 0 <= v < mask.shape[0] and 0 <= u < mask.shape[1] and mask[v, u] > 0
+
     def prepare_view(self):
         """頭部カメラで見るときは、アームが写り込んで深度が抜けないよう横へよけておく。"""
         if self.view != 'head':
             return
         current = [self.joints.get(n) for n in self.arm_joints]
-        if None not in current and max(abs(a - b) for a, b in zip(current, self.head_arm_pose)) < 0.05:
+        if None not in current and max(abs(a - b) for a, b in zip(current, self.arm_aside)) < 0.05:
             return
-        self.arm_to(self.head_arm_pose)
+        self.arm_to(self.arm_aside)
 
     def view_to(self, joints):
         if self.view == 'head':
