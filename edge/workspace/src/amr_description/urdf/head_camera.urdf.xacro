@@ -86,7 +86,7 @@
     <child link="${namespace}head_tilt_link"/>
     <!-- サーボの位置の値が増える向きが、カメラが上を向く向き。 -->
     <axis xyz="0 -1 0"/>
-    <limit effort="10" velocity="10" lower="${-pi / 4}" upper="${pi / 4}"/>
+    <limit effort="10" velocity="10" lower="${radians(-55)}" upper="${pi / 4}"/>
   </joint>
 
   <link name="${namespace}head_tilt_link">

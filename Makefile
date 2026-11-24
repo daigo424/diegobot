@@ -137,7 +137,7 @@ teleop:
 # 記録を始める前に頭部をHEAD_POSE(パン,チルト[rad])に動かす。HEAD_POSE=を空にすると、その時点の向き(make adjust-head-cameraで合わせた向き)のまま使う。
 DATASET   ?= test
 TASK      ?=
-HEAD_POSE ?= 0.0,-0.78
+HEAD_POSE ?= 0.0,-0.86
 record-vla:
 	$(if $(TASK),,$(error TASK に学習に使う指示文を渡してください(例: make record-vla TASK="Pick up the block")))
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
