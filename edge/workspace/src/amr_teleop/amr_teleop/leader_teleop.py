@@ -41,6 +41,7 @@ class LeaderTeleop(Node):
         self.switched = False
         self.switching = None
         self.last_read = self.get_clock().now()
+        self.previous_leader = None
         self.leader_pub = self.create_publisher(JointState, 'leader/joint_states', 10)
         self.cmd_pub = self.create_publisher(Float64MultiArray, f'/{self.teleop_controller}/commands', 10)
         self.create_subscription(JointState, '/joint_states', self.on_joint_states, 10)
@@ -72,6 +73,11 @@ class LeaderTeleop(Node):
             return
         self.last_read = now
         leader = [(r - z) * STEP_RAD + a for r, z, a in zip(raw, self.zero_raw, self.zero_angle)]
+        # サーボの位置は1周を0〜4095で表し、境目をまたぐと角度が1周分跳ぶ(手首を反らすと起きる)。跳んだ値のまま
+        # 範囲に収めると実機が反対側の端へ振れるため、前の値に一番近い表し方にして連続させる。
+        previous = self.previous_leader or [0.0] * len(leader)
+        leader = [p + math.remainder(q - p, 2.0 * math.pi) for q, p in zip(leader, previous)]
+        self.previous_leader = leader
         self.leader_pub.publish(JointState(header=Header(stamp=now.to_msg()), name=self.joints, position=leader))
         if not self.follow:
             return
