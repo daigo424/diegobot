@@ -13,6 +13,7 @@ import json
 import socket
 import struct
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -48,13 +49,20 @@ def decode(jpeg):
     return np.asarray(Image.open(io.BytesIO(jpeg)).convert('RGB'))
 
 
+def read_rename_map(checkpoint):
+    path = Path(checkpoint) / 'train_config.json'
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text()).get('rename_map') or {}
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('checkpoint', help='pretrained_modelのフォルダ')
     ap.add_argument('--host', default='127.0.0.1')
     ap.add_argument('--port', type=int, default=5555)
     ap.add_argument('--device', default='cuda')
-    ap.add_argument('--n-action-steps', type=int, help='1回の推論で出した動作を何コマ続けて使うか(ACT)')
+    ap.add_argument('--n-action-steps', type=int, help='1回の推論で出した動作を何コマ続けて使うか')
     ap.add_argument('--temporal-ensemble', type=float, metavar='COEFF',
                     help='ACTで毎コマ推論し、重なった予測を重み exp(-COEFF*i) で平均する')
     args = ap.parse_args()
@@ -70,7 +78,10 @@ def main():
     policy.to(args.device).eval()
     preprocessor, postprocessor = make_pre_post_processors(cfg, pretrained_path=args.checkpoint)
     device = torch.device(args.device)
-    image_keys = [k for k in cfg.input_features if k.startswith('observation.images.')]
+    # SmolVLAは学習時にカメラ名をcamera1等へ読み替えている。読み替え先が無いキー(空のカメラ)は渡さず、モデル側で空にさせる。
+    renamed = {v: k for k, v in read_rename_map(args.checkpoint).items()}
+    image_keys = {k: renamed.get(k, k).rsplit('.', 1)[1] for k in cfg.input_features
+                  if k.startswith('observation.images.') and (k in renamed or not renamed)}
     print(f'{cfg.type} を読み込んだ。カメラ {image_keys}、n_action_steps={cfg.n_action_steps}、'
           f'temporal_ensemble_coeff={getattr(cfg, "temporal_ensemble_coeff", None)}', flush=True)
 
@@ -92,8 +103,8 @@ def main():
                             continue
                         start = time.perf_counter()
                         obs = {'observation.state': np.asarray(header['state'], dtype=np.float32)}
-                        for key in image_keys:
-                            obs[key] = decode(images[key.rsplit('.', 1)[1]])
+                        for key, camera in image_keys.items():
+                            obs[key] = decode(images[camera])
                         action = predict_action(obs, policy, device, preprocessor, postprocessor,
                                                 use_amp=False, task=header.get('task'))
                         send_json(conn, {'action': action.squeeze(0).cpu().numpy().astype(float).tolist(),
