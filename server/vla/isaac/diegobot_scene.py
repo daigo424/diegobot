@@ -21,8 +21,10 @@ GRIPPER_LINK = (f'{BASE}/arm_mount_link/arm_base_link/shoulder_link/upper_arm_li
                 'gripper_link')
 HEAD_CAMERA_LINK = f'{BASE}/head_base_link/head_pan_link/head_tilt_link/head_camera_link'
 WRIST_CAMERA_LINK = f'{GRIPPER_LINK}/arm_camera_mount_link/hp60c_link/hp60c_calib_link/hp60c_upright_link'
-# Head tilt the episodes were recorded and run with.
-HEAD_TILT = -0.86
+# Head direction when the real robot reports the recording pose (pan 0, tilt -0.86): fitted by rendering the recorded
+# episodes' first frames until the blocks and the chassis line up with the real head camera images.
+HEAD_PAN = -0.077
+HEAD_TILT = -0.821
 # Arm pose the real episodes start from (the policy runner's home pose).
 HOME_JOINTS = (0.0, -1.6, 1.33, 1.39, -1.46, 0.0)
 BLOCK_SIZE = (0.06, 0.03, 0.03)
@@ -49,28 +51,57 @@ def yaw_quat(yaw):
     return (0.0, 0.0, math.sin(yaw / 2), math.cos(yaw / 2))
 
 
-def camera(parent, name, k, width, height, pos, rot):
-    # Offsets are the camera drivers' static TF from the URDF link to the colour optical frame.
+# Real cameras by scene entity: URDF link, prim name, colour intrinsics (fx, fy, cx, cy) from camera_info, image size,
+# and the drivers' static TF from the link to the colour optical frame.
+CAMERAS = {
+    'head_camera': (HEAD_CAMERA_LINK, 'head_cam', (406.371, 406.475, 419.607, 237.234), (848, 480),
+                    (0.0, -0.024, 0.0), (0.5, -0.5, 0.5, -0.5)),
+    'wrist_camera': (WRIST_CAMERA_LINK, 'wrist_cam', (594.288, 593.767, 301.633, 240.482), (640, 480),
+                     (0.002, -0.012, 0.0), (-0.501, 0.502, -0.496, 0.501)),
+}
+
+
+def render_window(intrinsics, size):
+    """Rendered size and crop offset that put the real principal point where it is in the real image.
+
+    Omniverse cameras always look through the image centre, so a larger image centred on the principal point is
+    rendered and the real-sized window is cut from it (the remaining offset is under half a pixel).
+    """
+    (_, _, cx, cy), (w, h) = intrinsics, size
+    rw, rh = math.ceil(2 * max(cx, w - cx)), math.ceil(2 * max(cy, h - cy))
+    ox = min(max(round(rw / 2 - cx), 0), rw - w)
+    oy = min(max(round(rh / 2 - cy), 0), rh - h)
+    return (rw, rh), (ox, oy)
+
+
+def camera(name):
+    link, prim, (fx, fy, _, _), _, pos, rot = CAMERAS[name]
+    (rw, rh), _ = render_window(CAMERAS[name][2], CAMERAS[name][3])
+    k = [fx, 0.0, rw / 2, 0.0, fy, rh / 2, 0.0, 0.0, 1.0]
     return CameraCfg(
-        prim_path=f'{parent}/{name}',
+        prim_path=f'{link}/{prim}',
         update_period=0.0,
-        width=width,
-        height=height,
+        width=rw,
+        height=rh,
         data_types=['rgb'],
         spawn=sim_utils.PinholeCameraCfg.from_intrinsic_matrix(
-            intrinsic_matrix=k, width=width, height=height, clipping_range=(0.01, 20.0)),
+            intrinsic_matrix=k, width=rw, height=rh, clipping_range=(0.01, 20.0)),
         offset=CameraCfg.OffsetCfg(pos=pos, rot=rot, convention='ros'),
     )
 
 
+def camera_rgb(scene, name):
+    """(num_envs, H, W, 3) uint8 image of the real camera's size and principal point."""
+    (w, h), ((ox, oy)) = CAMERAS[name][3], render_window(CAMERAS[name][2], CAMERAS[name][3])[1]
+    return scene[name].data.output['rgb'].torch[:, oy:oy + h, ox:ox + w, :3]
+
+
 def head_camera():
-    return camera(HEAD_CAMERA_LINK, 'head_cam', [406.371, 0.0, 419.607, 0.0, 406.475, 237.234, 0.0, 0.0, 1.0],
-                  848, 480, (0.0, -0.024, 0.0), (0.5, -0.5, 0.5, -0.5))
+    return camera('head_camera')
 
 
 def wrist_camera():
-    return camera(WRIST_CAMERA_LINK, 'wrist_cam', [594.288, 0.0, 301.633, 0.0, 593.767, 240.482, 0.0, 0.0, 1.0],
-                  640, 480, (0.002, -0.012, 0.0), (-0.501, 0.502, -0.496, 0.501))
+    return camera('wrist_camera')
 
 
 def robot_cfg(usd, joints=HOME_JOINTS):
@@ -78,7 +109,7 @@ def robot_cfg(usd, joints=HOME_JOINTS):
         prim_path='{ENV_REGEX_NS}/Robot',
         spawn=sim_utils.UsdFileCfg(usd_path=os.path.abspath(usd)),
         init_state=ArticulationCfg.InitialStateCfg(
-            joint_pos={**dict(zip(ARM_JOINTS, joints)), 'head_pan': 0.0, 'head_tilt': HEAD_TILT, 'wheel_.*': 0.0}),
+            joint_pos={**dict(zip(ARM_JOINTS, joints)), 'head_pan': HEAD_PAN, 'head_tilt': HEAD_TILT, 'wheel_.*': 0.0}),
         actuators={
             'arm': ImplicitActuatorCfg(joint_names_expr=ARM_JOINTS, stiffness=400.0, damping=20.0),
             # The head only holds a fixed pose; a softer drive lets it sag and shifts the head camera view.

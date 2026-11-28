@@ -2,7 +2,8 @@
 
 The real recordings keep only joint angles and images, so the block pose is taken as the pose between the closed
 fingertips (URDF forward kinematics) at the grasp. Writes a JSON with each episode's block pose, joint trajectory
-leader angles and grasp frame, plus the first head camera frame as PNG for comparing against a simulated render.
+leader angles and grasp frame, plus the first head camera frame and the wrist camera frame at the grasp as PNG for comparing
+against a simulated render.
 Run with the LeRobot Python environment, e.g.
     python server/vla/isaac/estimate_block_poses.py data/vla/lerobot/pick_block_v2 data/vla/isaac/replay/pick_block_v2
 """
@@ -101,6 +102,10 @@ def main():
                          grip_at_grasp=float(q[grasp, 5]), tilt=float(-tip[2, 2]))
         frame = dataset[int(index[0])]['observation.images.head']
         Image.fromarray((frame.permute(1, 2, 0).numpy() * 255).astype(np.uint8)).save(args.out / f'real_{ep:03d}.png')
+        if grasp is not None:
+            frame = dataset[int(index[grasp])]['observation.images.wrist']
+            Image.fromarray((frame.permute(1, 2, 0).numpy() * 255).astype(np.uint8)).save(
+                args.out / f'real_wrist_grasp_{ep:03d}.png')
         result['episodes'].append(entry)
         block = entry.get('block')
         print(f'ep{ep:3d} {len(q):3d} frames  grasp@{grasp}  regrasps {regrasps}  '

@@ -39,7 +39,7 @@ from PIL import Image  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from diegobot_scene import (  # noqa: E402
-    DiegobotSceneCfg, block_cfg, dress_scene, floor_texture, robot_cfg)
+    DiegobotSceneCfg, block_cfg, camera_rgb, dress_scene, floor_texture, robot_cfg)
 
 
 def main():
@@ -62,8 +62,8 @@ def main():
             scene.update(sim.get_physics_dt())
         os.makedirs(args.out, exist_ok=True)
         for name in ('head_camera', 'wrist_camera'):
-            rgb = scene[name].data.output['rgb'].torch[0].cpu().numpy().astype(np.uint8)
-            Image.fromarray(rgb[..., :3]).save(os.path.join(args.out, f'{name}.png'))
+            rgb = camera_rgb(scene, name)[0].cpu().numpy().astype(np.uint8)
+            Image.fromarray(rgb).save(os.path.join(args.out, f'{name}.png'))
         print('saved', args.out, flush=True)
 
 

@@ -32,12 +32,13 @@ from isaaclab.utils.datasets import HDF5DatasetFileHandler  # noqa: E402
 from PIL import Image  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from diegobot_scene import camera_rgb  # noqa: E402
 from pick_block_env import TASK_ID, PickBlockEnvCfg  # noqa: E402
 
 
 def frame(env):
-    head = env.scene['head_camera'].data.output['rgb'].torch[0, ..., :3].cpu().numpy().astype(np.uint8)
-    wrist = env.scene['wrist_camera'].data.output['rgb'].torch[0, ..., :3].cpu().numpy().astype(np.uint8)
+    head = camera_rgb(env.scene, 'head_camera')[0].cpu().numpy().astype(np.uint8)
+    wrist = camera_rgb(env.scene, 'wrist_camera')[0].cpu().numpy().astype(np.uint8)
     wrist = np.asarray(Image.fromarray(wrist).resize((head.shape[0] * 4 // 3, head.shape[0])))
     return np.concatenate([head, wrist], axis=1)
 
