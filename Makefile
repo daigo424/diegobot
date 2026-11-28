@@ -149,6 +149,29 @@ record-vla:
 	$(if $(TASK),,$(error TASK に学習に使う指示文を渡してください(例: make record-vla TASK="Pick up the block")))
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' -p object:='$(OBJECT)' -p scene:='$(SCENE)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
 
+# make record-vlaで記録したエピソードを見る。DATASETの全エピソード、EPISODE=<番号>でその1本、FAILED=1で失敗として保存した方。
+# vla-videoは頭部|手首カメラを並べたmp4をdata/vla/videos/<DATASET>/に作って再生する(作った後に記録が変わっていなければ作り直さない)。
+# vla-imagesは始める時の画像(物を測っていれば枠で囲んだ画像と切り出し)を開く。EPISODEなしでは1本につき1枚ずつめくる。
+EPISODE      ?=
+FAILED       ?=
+VIDEO_PLAYER ?= totem
+IMAGE_VIEWER ?= eog
+VLA_RAW_DIR   = data/vla/raw/$(DATASET)$(if $(filter 1,$(FAILED)),_failed)
+vla-video:
+	@test -d $(VLA_RAW_DIR) || { echo "$(VLA_RAW_DIR) が無い(DATASET=<記録したデータセット名>を渡す)"; exit 1; }
+	@videos=$$($(VLA_PYTHON) server/vla/episode_video.py $(VLA_RAW_DIR) --out data/vla/videos/$(notdir $(VLA_RAW_DIR)) \
+	  $(if $(EPISODE),--episodes $(EPISODE)) | grep '\.mp4$$') && echo "$$videos" && $(VIDEO_PLAYER) $$videos
+
+vla-images:
+	@test -d $(VLA_RAW_DIR) || { echo "$(VLA_RAW_DIR) が無い(DATASET=<記録したデータセット名>を渡す)"; exit 1; }
+	@if [ -n "$(EPISODE)" ]; then \
+	  files=$$(ls $(VLA_RAW_DIR)/episode_$$(printf %06d $(EPISODE))/*.jpg 2>/dev/null); \
+	else \
+	  files=$$(for d in $(VLA_RAW_DIR)/episode_*; do ls $$d/object_head.jpg $$d/start_head.jpg 2>/dev/null | head -1; done); \
+	fi; \
+	if [ -z "$$files" ]; then echo "画像が無い(物の画像を残すようにする前に記録したエピソードは make vla-video で見る)"; exit 1; fi; \
+	echo "$$files"; $(IMAGE_VIEWER) $$files
+
 # 実機の頭部(パン・チルト)をスライダーで動かす。
 adjust-head-camera:
 	$(MAKE) colcon CMD_RUN="ros2 run amr_teleop head_slider"
