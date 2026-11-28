@@ -6,6 +6,7 @@ import sys
 import termios
 import threading
 import time
+from datetime import datetime
 
 import rclpy
 import rosbag2_py
@@ -309,7 +310,9 @@ class EpisodeRecorder(Node):
             self.print_next()
             return
         with open(os.path.join(path, 'episode.json'), 'w') as f:
-            json.dump({'task': self.task, 'success': success, 'head_pose': self.head_pose, 'duration': duration,
+            json.dump({'task': self.task, 'success': success,
+                       'recorded_at': datetime.fromtimestamp(self.started).astimezone().isoformat(timespec='seconds'),
+                       'head_pose': self.head_pose, 'duration': duration,
                        'counts': counts, 'object': self.object, 'object_size_cm': self.object_size, 'scene': self.scene,
                        'snapshots': sorted(self.snapshots) + (['/tf_static'] if self.tf_static else [])},
                       f, ensure_ascii=False, indent=1)

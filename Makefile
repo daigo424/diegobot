@@ -149,6 +149,11 @@ record-vla:
 	$(if $(TASK),,$(error TASK に学習に使う指示文を渡してください(例: make record-vla TASK="Pick up the block")))
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' -p object:='$(OBJECT)' -p scene:='$(SCENE)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
 
+# make record-vlaで記録したデータセットの一覧(DATASETを渡すとそのエピソードの一覧)。日時・本数・物・メモを出す。
+# lessで開く(画面に収まればそのまま出す。長ければスクロール、/で検索、qで抜ける)。
+vla-list:
+	@python3 server/vla/list_episodes.py data/vla/raw $(if $(filter command line,$(origin DATASET)),$(DATASET)) | less -FRXS
+
 # make record-vlaで記録したエピソードを見る。DATASETの全エピソード、EPISODE=<番号>でその1本、FAILED=1で失敗として保存した方。
 # vla-videoは頭部|手首カメラを並べたmp4をdata/vla/videos/<DATASET>/に作って再生する(作った後に記録が変わっていなければ作り直さない)。
 # vla-imagesは始める時の画像(物を測っていれば枠で囲んだ画像と切り出し)を開く。EPISODEなしでは1本につき1枚ずつめくる。
