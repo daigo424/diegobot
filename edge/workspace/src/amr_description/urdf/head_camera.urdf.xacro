@@ -6,9 +6,10 @@
   <!-- Gemini 335Lをチルトアームのどこに付けるか。head_camera_linkは、ドライバーが深度の原点にする左の赤外線カメラのレンズで、
        前面の中央から左へ、手首カメラと同じ物を見た位置が合うようずらしている。 -->
   <xacro:property name="head_camera_mesh_xyz" value="0.0872 -0.0146 0.0000"/>
-  <xacro:property name="head_camera_link_xyz" value="0.0894 0.0174 0.0010"/>
-  <!-- 姿勢は、深度で見た床がTF上の床と重なるよう補正した値 -->
-  <xacro:property name="head_camera_link_rpy" value="${radians(-1.06)} ${radians(0.11)} 0"/>
+  <xacro:property name="head_camera_link_xyz" value="0.0894 0.0174 0.0027"/>
+  <!-- 姿勢は、深度で見た床がTF上の床と重なるよう補正した値。チルトのギアのガタは、大きく下を向くと反対側に寄って
+       カメラの向きが変わるため、記録やつかむ時に使う深く下を向いた範囲で合わせている(探す時の浅い向きでは少しずれる)。 -->
+  <xacro:property name="head_camera_link_rpy" value="${radians(0.42)} ${radians(-1.68)} 0"/>
 
   <!-- 部品のSTLはFusionの組み立ての共通原点(x右・-y前・z上)のままなので、リンク原点(関節の中心)からずらして向きを直す。 -->
   <xacro:macro name="head_part" params="file xyz">

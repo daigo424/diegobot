@@ -29,7 +29,8 @@
         <!-- 掴んだまま締め続ける力を抑えるため、グリッパーは低いまま -->
         <xacro:feetech_joint name="gripper" id="6" offset="2017" p_gain="16"/>
         <!-- 頭部カメラアーム -->
-        <xacro:feetech_joint name="head_pan" id="11" offset="2048"/>
+        <!-- 頭部のパンは、頭部カメラに写る積み木と車体の位置が実機の画像と合うよう合わせた値(生値の中央では左を向いていた) -->
+        <xacro:feetech_joint name="head_pan" id="11" offset="2098"/>
         <xacro:feetech_joint name="head_tilt" id="12" offset="2048"/>
     </ros2_control>
 </robot>
