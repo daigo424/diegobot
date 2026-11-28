@@ -53,7 +53,7 @@ class PolicyRunner(Node):
         self.camera_names = p('camera_names', ['head', 'wrist'])
         camera_topics = p('camera_topics', ['/head_camera/color/image_raw/compressed', '/camera/camera/color/image_raw/compressed'])
         self.head_joints = p('head_joints', ['head_pan', 'head_tilt'])
-        self.head_pose = p('head_pose', [0.0, -0.86])
+        self.head_pose = p('head_pose', [-0.077, -0.86])
         self.task = p('task', 'Pick up the block')
         # 記録を変換した時のfpsと同じ周期で回す(ポリシーは1コマごとの動作を学んでいる)。
         self.rate = p('rate', 15.0)

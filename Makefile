@@ -142,7 +142,7 @@ teleop:
 # SCENEは場面のメモ(物の名前・床・照明など)。どちらも記録中にn/sで変えられる。
 DATASET   ?= test
 TASK      ?=
-HEAD_POSE ?= 0.0,-0.86
+HEAD_POSE ?= -0.077,-0.86
 OBJECT    ?=
 SCENE     ?=
 record-vla:

@@ -21,10 +21,9 @@ GRIPPER_LINK = (f'{BASE}/arm_mount_link/arm_base_link/shoulder_link/upper_arm_li
                 'gripper_link')
 HEAD_CAMERA_LINK = f'{BASE}/head_base_link/head_pan_link/head_tilt_link/head_camera_link'
 WRIST_CAMERA_LINK = f'{GRIPPER_LINK}/arm_camera_mount_link/hp60c_link/hp60c_calib_link/hp60c_upright_link'
-# Head direction when the real robot reports the recording pose (pan 0, tilt -0.86): fitted by rendering the recorded
-# episodes' first frames until the blocks and the chassis line up with the real head camera images.
+# Head pose the episodes are recorded and run with (make record-vla, policy_runner).
 HEAD_PAN = -0.077
-HEAD_TILT = -0.821
+HEAD_TILT = -0.86
 # Arm pose the real episodes start from (the policy runner's home pose).
 HOME_JOINTS = (0.0, -1.6, 1.33, 1.39, -1.46, 0.0)
 BLOCK_SIZE = (0.06, 0.03, 0.03)
