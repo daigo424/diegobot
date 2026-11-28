@@ -162,6 +162,18 @@ run-policy:
 	[time.sleep(1) for _ in iter(lambda: ok() or time.time()>end, True)]; sys.exit(0 if ok() else 'policy server did not start')" && \
 	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop check_arm && ros2 run amr_teleop policy_runner $(if $(TASK),--ros-args -p task:='$(TASK)')"
 
+# シミュレーター(Isaac Lab)の記録(HDF5)を画面で再生し、頭部|手首カメラの動画もdata/vla/isaac/videosに保存する。
+# SIM_DEMOSで本を選ぶ(例: SIM_DEMOS="demo_0 demo_13"、空なら全部)。SIM_VIEW=0なら画面を出さず動画だけ作る。
+ISAAC_BIN   ?= $(HOME)/miniforge3/envs/isaaclab/bin
+ISAACLAB    ?= $(HOME)/IsaacLab
+SIM_DATASET ?= data/vla/isaac/demos/pick_block_v2_generated_test.hdf5
+SIM_DEMOS   ?=
+SIM_VIEW    ?= 1
+sim-replay:
+	cd $(ISAACLAB) && PATH="$(ISAAC_BIN):$$(echo "$$PATH" | tr ':' '\n' | grep -v platformio | paste -sd:)" OMNI_KIT_ACCEPT_EULA=yes \
+	  python $(CURDIR)/server/vla/isaac/render_demos.py $(CURDIR)/$(SIM_DATASET) --out $(CURDIR)/data/vla/isaac/videos \
+	  $(if $(SIM_DEMOS),--demos $(SIM_DEMOS)) $(if $(filter 1,$(SIM_VIEW)),--viz kit --realtime)
+
 # manipulationに加え、探す・近づくアクション(/behavior_server/search, /behavior_server/approach)を出す。
 # 車体が動くため、周りに物が無い床で使う。先にmake perceptionも起動しておく。
 behaviors:
