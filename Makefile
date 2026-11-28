@@ -138,12 +138,16 @@ teleop:
 
 # テレオペをエピソードごとに/data/vla/raw/<DATASET>へ記録する(Enterで開始/保存)。TASKは学習に使う指示文。
 # 記録を始める前に頭部をHEAD_POSE(パン,チルト[rad])に動かす。HEAD_POSE=を空にすると、その時点の向き(make adjust-head-cameraで合わせた向き)のまま使う。
+# OBJECTを渡すと、始める時に頭部カメラで物の位置・向き・大きさを測って残す(先にmake perceptionを起動しておく)。
+# SCENEは場面のメモ(物の名前・床・照明など)。どちらも記録中にn/sで変えられる。
 DATASET   ?= test
 TASK      ?=
 HEAD_POSE ?= 0.0,-0.86
+OBJECT    ?=
+SCENE     ?=
 record-vla:
 	$(if $(TASK),,$(error TASK に学習に使う指示文を渡してください(例: make record-vla TASK="Pick up the block")))
-	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
+	$(EXEC) $(ROS2_SERVICE) bash -c "$(CMD_ROS2_SOURCE) && $(CMD_ROS2_WS_SOURCE) && ros2 run amr_teleop record_episodes --ros-args -p dataset:=$(DATASET) -p task:='$(TASK)' -p object:='$(OBJECT)' -p scene:='$(SCENE)' $(if $(HEAD_POSE),-p head_pose:=[$(HEAD_POSE)])"
 
 # 実機の頭部(パン・チルト)をスライダーで動かす。
 adjust-head-camera:
